@@ -18,6 +18,30 @@ export class CosmicScene {
         this.cameraTarget = new THREE.Vector3(0, 0, 0);
         this.currentLookAt = new THREE.Vector3(0, 0, 0);
 
+        // Planet labels (HTML overlays)
+        this.planetLabels = {};
+        this.labelsContainer = null;
+
+        // Click detection
+        this.raycaster = new THREE.Raycaster();
+        this.mouse = new THREE.Vector2();
+        this.onPlanetClick = null; // Callback for planet clicks
+
+        // Planet display names (with proper capitalization)
+        this.planetDisplayNames = {
+            sun: 'Sun',
+            mercury: 'Mercury',
+            venus: 'Venus',
+            earth: 'Earth',
+            moon: 'Moon',
+            mars: 'Mars',
+            jupiter: 'Jupiter',
+            saturn: 'Saturn',
+            uranus: 'Uranus',
+            neptune: 'Neptune'
+        };
+
+        this.simulationSpeed = 0.5; // Default fast speed for God View
         this.init();
     }
 
@@ -27,10 +51,71 @@ export class CosmicScene {
         this.createRenderer();
         this.createStars();
         this.createLighting();
+        this.createLabelsContainer();
         this.createSolarSystem();
+        this.setupClickHandler();
         this.handleResize();
 
         window.addEventListener('resize', () => this.handleResize());
+    }
+
+    /**
+     * Create container for planet labels
+     */
+    createLabelsContainer() {
+        this.labelsContainer = document.createElement('div');
+        this.labelsContainer.className = 'planet-labels-container';
+        document.body.appendChild(this.labelsContainer);
+    }
+
+    /**
+     * Setup click handler for planets
+     */
+    setupClickHandler() {
+        this.canvas.addEventListener('click', (event) => {
+            // Calculate mouse position in normalized device coordinates
+            const rect = this.canvas.getBoundingClientRect();
+            this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            // Update raycaster
+            this.raycaster.setFromCamera(this.mouse, this.camera);
+
+            // Check for intersections with planets
+            const planetMeshes = Object.values(this.planets);
+            const intersects = this.raycaster.intersectObjects(planetMeshes, false);
+
+            if (intersects.length > 0) {
+                // Find which planet was clicked
+                const clickedMesh = intersects[0].object;
+                for (const [name, mesh] of Object.entries(this.planets)) {
+                    if (mesh === clickedMesh && this.onPlanetClick) {
+                        this.onPlanetClick(name);
+                        break;
+                    }
+                }
+            }
+        });
+
+        // Change cursor on hover
+        this.canvas.addEventListener('mousemove', (event) => {
+            const rect = this.canvas.getBoundingClientRect();
+            this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            this.raycaster.setFromCamera(this.mouse, this.camera);
+            const planetMeshes = Object.values(this.planets);
+            const intersects = this.raycaster.intersectObjects(planetMeshes, false);
+
+            this.canvas.style.cursor = intersects.length > 0 ? 'pointer' : 'default';
+        });
+    }
+
+    /**
+     * Set callback for planet clicks
+     */
+    setPlanetClickCallback(callback) {
+        this.onPlanetClick = callback;
     }
 
     createScene() {
@@ -198,7 +283,64 @@ export class CosmicScene {
         return { mesh, group: orbitGroup };
     }
 
+    /**
+     * Create HTML label for a planet
+     */
+    createPlanetLabel(planetName, radius) {
+        const label = document.createElement('div');
+        label.className = 'planet-label';
+        label.textContent = this.planetDisplayNames[planetName] || planetName;
+        label.dataset.planet = planetName;
 
+        // Store original radius for positioning above planet
+        label.dataset.radius = radius;
+
+        this.labelsContainer.appendChild(label);
+        this.planetLabels[planetName] = label;
+    }
+
+    /**
+     * Update all planet label positions based on 3D world to screen projection
+     */
+    updateLabelPositions() {
+        if (!this.labelsContainer) return;
+
+        for (const [name, label] of Object.entries(this.planetLabels)) {
+            const group = this.orbitGroups[name];
+            if (!group) continue;
+
+            // Get world position of planet
+            const worldPos = new THREE.Vector3();
+            group.getWorldPosition(worldPos);
+
+            // Add offset above the planet based on radius
+            const radius = parseFloat(label.dataset.radius) || 3;
+            worldPos.y += radius * 1.5;
+
+            // Project to screen coordinates
+            const screenPos = worldPos.clone().project(this.camera);
+
+            // Check if behind camera
+            if (screenPos.z > 1) {
+                label.style.display = 'none';
+                continue;
+            }
+
+            // Convert to CSS coordinates
+            const x = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
+            const y = (screenPos.y * -0.5 + 0.5) * window.innerHeight;
+
+            // Check if on screen
+            if (x < -50 || x > window.innerWidth + 50 || y < -50 || y > window.innerHeight + 50) {
+                label.style.display = 'none';
+                continue;
+            }
+
+            label.style.display = 'block';
+            label.style.left = `${x}px`;
+            label.style.top = `${y}px`;
+        }
+    }
 
     createOrbitLine(radius, color = 0xffffff) {
         const points = [];
@@ -260,6 +402,9 @@ export class CosmicScene {
             this.orbitGroups[key] = result.group;
             this.scene.add(result.group);
 
+            // Create label for planet
+            this.createPlanetLabel(key, config.radius);
+
             // Extras for Sun/Earth
             if (key === 'sun') this.addSunGlow();
             if (key === 'earth') this.addEarthAtmosphere();
@@ -270,6 +415,9 @@ export class CosmicScene {
         const moonResult = this.createPlanet(moonConfig);
         this.planets.moon = moonResult.mesh;
         this.orbitGroups.moon = moonResult.group; // This group will orbit Earth Group
+
+        // Create label for moon
+        this.createPlanetLabel('moon', moonConfig.radius);
 
         // Position moon relative to 0,0 (which will be Earth's center in its group)
         moonResult.group.position.set(moonConfig.distance, 0, 0);
@@ -333,19 +481,19 @@ export class CosmicScene {
 
             // Self Rotation (Subtle)
             if (mesh) {
-                mesh.rotation.y += config.rotationSpeed * 0.5; // Slowed down
+                mesh.rotation.y += config.rotationSpeed * this.simulationSpeed;
             }
 
             // Orbital Revolution
             if (group && key !== 'sun' && key !== 'moon') {
-                config.angle += config.speed * 0.5; // Slowed down simulation
+                config.angle += config.speed * this.simulationSpeed;
                 group.position.x = Math.cos(config.angle) * config.distance;
                 group.position.z = Math.sin(config.angle) * config.distance;
             }
 
             // Moon Orbit around Earth
             if (key === 'moon' && group) {
-                config.angle += config.speed * 0.5;
+                config.angle += config.speed * this.simulationSpeed;
                 group.position.x = Math.cos(config.angle) * config.distance;
                 group.position.z = Math.sin(config.angle) * config.distance;
             }
@@ -354,6 +502,9 @@ export class CosmicScene {
         // Smooth camera follow
         this.currentLookAt.lerp(this.cameraTarget, 0.05);
         this.camera.lookAt(this.currentLookAt);
+
+        // Update planet label positions
+        this.updateLabelPositions();
     }
 
     render() {
@@ -364,5 +515,9 @@ export class CosmicScene {
     setCameraTarget(targetVector) {
         // We clone the vector to avoid reference locking if target is a mesh position directly
         this.cameraTarget.copy(targetVector);
+    }
+
+    setSimulationSpeed(speed) {
+        this.simulationSpeed = speed;
     }
 }

@@ -1,5 +1,6 @@
 import { solarSystemData } from '../data/solarSystemData.js';
 import { createStatGrid, createProfessionalContent, createPersonalNarrative, createPanelHeader } from './HUDComponents.js';
+import { PlanetPreview } from './PlanetPreview.js';
 import gsap from 'gsap';
 
 /**
@@ -8,6 +9,9 @@ import gsap from 'gsap';
  */
 export class Holocard {
     constructor() {
+        // Planet order for navigation
+        this.planetOrder = ['earth', 'sun', 'moon', 'mars', 'mercury', 'jupiter', 'venus', 'saturn', 'neptune'];
+
         this.wrapper = document.createElement('div');
         this.wrapper.className = 'holocard-wrapper hidden';
         this.wrapper.innerHTML = `
@@ -24,10 +28,26 @@ export class Holocard {
         this.leftPanel = this.wrapper.querySelector('.left-panel');
         this.centerPanel = this.wrapper.querySelector('.center-panel');
         this.rightPanel = this.wrapper.querySelector('.right-panel');
-        this.panels = [this.leftPanel, this.centerPanel, this.rightPanel];
+
+        // Create Next button as a fixed element (always visible)
+        this.nextBtn = document.createElement('button');
+        this.nextBtn.className = 'holocard-next-btn';
+        this.nextBtn.setAttribute('aria-label', 'Go to next planet');
+        this.nextBtn.innerHTML = '→';
+        document.body.appendChild(this.nextBtn);
+
+        // Order: center first, then left, then right (center panel loads first)
+        this.panels = [this.centerPanel, this.leftPanel, this.rightPanel];
         this.isVisible = false;
         this.currentPlanet = null;
         this.visiblePanelCount = 0;
+
+        // Callback for scroll navigation (set from main.js)
+        this.onNavigateToNext = null;
+        this.isNavigating = false;
+
+        // 3D Planet Preview
+        this.planetPreview = new PlanetPreview();
 
         // Hide all panels initially
         this.panels.forEach(panel => {
@@ -37,6 +57,38 @@ export class Holocard {
 
         // Close on backdrop click
         this.wrapper.querySelector('.holocard-backdrop').addEventListener('click', () => this.hide());
+
+        // Next button click handler with 400ms debounce
+        this.nextBtn.addEventListener('click', () => {
+            if (this.isClicking) return;
+            this.isClicking = true;
+            this.nextBtn.classList.add('disabled');
+
+            this.navigateToNextPlanet();
+
+            setTimeout(() => {
+                this.isClicking = false;
+                this.nextBtn.classList.remove('disabled');
+            }, 400); // 400ms debounce
+        });
+    }
+
+    /**
+     * Navigate to the next screen position
+     * Simplified: just triggers scroll by one viewport height
+     */
+    navigateToNextPlanet() {
+        console.log(`[${new Date().toISOString()}] 🔀 Next button clicked - scrolling down`);
+        if (this.onNavigateToNext) {
+            this.onNavigateToNext();
+        }
+    }
+
+    /**
+     * Set the navigation callback
+     */
+    setNavigationCallback(callback) {
+        this.onNavigateToNext = callback;
     }
 
     /**
@@ -45,21 +97,44 @@ export class Holocard {
     prepareContent(data) {
         if (!data) return;
 
+        // Kill any ongoing animations (prevent hide() callback from clearing state)
+        gsap.killTweensOf(this.panels);
+
+        // Reset navigation state when new content is ready (arrival at planet)
+        if (this.isNavigating) {
+            console.log('✅ Navigation complete, arrived at ' + data.id);
+            this.isNavigating = false;
+            if (this.nextBtn) this.nextBtn.classList.remove('disabled');
+        }
+
         // Update content
         this.wrapper.style.setProperty('--accent-color', data.accentColor);
-        this.leftPanel.innerHTML = createStatGrid(data.stats);
+        this.leftPanel.innerHTML = createStatGrid(data);
         this.centerPanel.innerHTML = createPanelHeader(data) + createPersonalNarrative(data);
         this.rightPanel.innerHTML = createProfessionalContent(data.professional);
 
         this.currentPlanet = data.id;
         this.visiblePanelCount = 0;
 
+        // Initialize 3D Preview in the left panel's circle
+        requestAnimationFrame(() => {
+            const circleContainer = this.leftPanel.querySelector('.holo-circle');
+            if (circleContainer) {
+                this.planetPreview.mount(circleContainer, data.id);
+            }
+        });
+
         // Reset all panels to hidden
         this.panels.forEach(panel => {
             gsap.set(panel, { opacity: 0, y: 100 });
         });
 
-        console.log(`🎴 Prepared content for: ${data.id}`);
+        // Hide the wrapper/backdrop for clean Card 0 view
+        this.wrapper.classList.remove('visible');
+        this.wrapper.classList.add('hidden');
+        this.isVisible = false;
+
+        console.log(`[${new Date().toISOString()}] 🎴 Prepared content for: ${data.id}`);
     }
 
     /**
@@ -77,26 +152,27 @@ export class Holocard {
         }
 
         const panel = this.panels[this.visiblePanelCount];
+        // Directions match new panel order: center, left, right
         const directions = [
-            { x: -100, y: 0 },  // Left panel from left
             { x: 0, y: 100 },   // Center panel from bottom
+            { x: -100, y: 0 },  // Left panel from left
             { x: 100, y: 0 }    // Right panel from right
         ];
         const dir = directions[this.visiblePanelCount];
 
-        // Animate panel in
+        // Animate panel in with slower 1.5s duration for visible fly-in effect
         gsap.fromTo(panel,
             { opacity: 0, x: dir.x, y: dir.y },
             {
                 opacity: 1,
                 x: 0,
                 y: 0,
-                duration: 0.6,
+                duration: 1.5,
                 ease: 'power3.out'
             }
         );
 
-        console.log(`🎴 Showing panel ${this.visiblePanelCount + 1}/3 for ${this.currentPlanet}`);
+        console.log(`[${new Date().toISOString()}] 🎴 Showing panel ${this.visiblePanelCount + 1}/3 for ${this.currentPlanet}`);
         this.visiblePanelCount++;
 
         return true;
@@ -110,10 +186,11 @@ export class Holocard {
 
         this.visiblePanelCount--;
         const panel = this.panels[this.visiblePanelCount];
+        // Directions match new panel order: center, left, right
         const directions = [
-            { x: -100, y: 0 },
-            { x: 0, y: 100 },
-            { x: 100, y: 0 }
+            { x: 0, y: 100 },   // Center panel to bottom
+            { x: -100, y: 0 },  // Left panel to left
+            { x: 100, y: 0 }    // Right panel to right
         ];
         const dir = directions[this.visiblePanelCount];
 
@@ -121,7 +198,7 @@ export class Holocard {
             opacity: 0,
             x: dir.x,
             y: dir.y,
-            duration: 0.4,
+            duration: 1.0,
             ease: 'power2.in'
         });
 
@@ -132,7 +209,7 @@ export class Holocard {
             this.isVisible = false;
         }
 
-        console.log(`🎴 Hiding panel, now ${this.visiblePanelCount}/3 visible`);
+        console.log(`[${new Date().toISOString()}] 🎴 Hiding panel, now ${this.visiblePanelCount}/3 visible`);
         return true;
     }
 
@@ -154,6 +231,11 @@ export class Holocard {
                 this.isVisible = false;
                 this.visiblePanelCount = 0;
                 this.currentPlanet = null;
+
+                // Stop the 3D preview to save resources
+                if (this.planetPreview) {
+                    this.planetPreview.stop();
+                }
             }
         });
     }

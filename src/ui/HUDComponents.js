@@ -12,7 +12,8 @@ export function createPanelHeader(data) {
     `;
 }
 
-export function createStatGrid(stats) {
+export function createStatGrid(data) {
+    const stats = data.stats;
     if (!stats || stats.length === 0) return '';
     return `
         <div class="panel-header">
@@ -27,7 +28,9 @@ export function createStatGrid(stats) {
             `).join('')}
         </div>
         <div class="planet-wireframe-placeholder">
-            <div class="holo-circle"></div>
+            <div class="holo-circle">
+                <span class="holo-circle-text">${data.title || data.id}</span>
+            </div>
         </div>
     `;
 }
