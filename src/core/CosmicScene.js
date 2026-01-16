@@ -145,28 +145,35 @@ export class CosmicScene {
     }
 
     createPlanet(config) {
-        const { radius, texture, emissive, emissiveIntensity, hasRing } = config;
+        const { radius, texture, color, emissive, emissiveIntensity, hasRing } = config;
 
         // Group to handle position (revolution) vs Mesh (rotation)
         const orbitGroup = new THREE.Group();
 
         const geometry = new THREE.SphereGeometry(radius, 64, 64);
-        const materialConfig = {
-            map: this.textureLoader.load(texture),
-            roughness: 0.7,
-            metalness: 0.2
-        };
 
-        if (emissive) {
-            materialConfig.emissive = new THREE.Color(emissive);
-            materialConfig.emissiveIntensity = emissiveIntensity || 1;
-            materialConfig.emissiveMap = this.textureLoader.load(texture);
-        }
+        // Use MeshBasicMaterial for guaranteed visibility (no lighting required)
+        const material = new THREE.MeshBasicMaterial({
+            color: new THREE.Color(color || 0xffffff)
+        });
 
-        const material = new THREE.MeshStandardMaterial(materialConfig);
         const mesh = new THREE.Mesh(geometry, material);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
+
+        // Try to load texture asynchronously
+        if (texture) {
+            this.textureLoader.load(
+                texture,
+                (loadedTex) => {
+                    console.log(`✅ Texture loaded: ${texture}`);
+                    material.map = loadedTex;
+                    material.needsUpdate = true;
+                },
+                undefined,
+                (err) => {
+                    console.warn(`⚠️ Texture failed: ${texture}`);
+                }
+            );
+        }
 
         // Tilt planet axis slightly
         mesh.rotation.z = Math.PI / 12;
@@ -182,14 +189,18 @@ export class CosmicScene {
             orbitGroup.position.x = Math.cos(config.angle) * config.distance;
             orbitGroup.position.z = Math.sin(config.angle) * config.distance;
 
-            // Add orbit trail
-            this.createOrbitLine(config.distance);
+            // Add orbit trail with planet color
+            this.createOrbitLine(config.distance, color);
         }
+
+        console.log(`🪐 Created planet: ${config.name} at distance ${config.distance}`);
 
         return { mesh, group: orbitGroup };
     }
 
-    createOrbitLine(radius) {
+
+
+    createOrbitLine(radius, color = 0xffffff) {
         const points = [];
         const segments = 128;
         for (let i = 0; i <= segments; i++) {
@@ -199,13 +210,12 @@ export class CosmicScene {
 
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
         const material = new THREE.LineBasicMaterial({
-            color: 0xffffff,
+            color: color,
             transparent: true,
-            opacity: 0.05
+            opacity: 0.2
         });
 
         const line = new THREE.Line(geometry, material);
-        // Vector3 construction above lays it on XZ plane (y=0), so no rotation needed.
         this.scene.add(line);
     }
 

@@ -35,15 +35,12 @@ class App {
         this.cosmicScene = new CosmicScene();
         this.holocard = new Holocard();
 
-        // Initialize Scroll Animator with Callback for UI
-        this.scrollAnimator = new ScrollAnimator(this.cosmicScene, (sceneId) => {
-            if (sceneId && solarSystemData[sceneId]) {
-                const data = solarSystemData[sceneId];
-                this.holocard.show(data);
-            } else {
-                this.holocard.hide();
-            }
-        });
+        // Initialize Scroll Animator with Holocard for sequential reveals
+        this.scrollAnimator = new ScrollAnimator(
+            this.cosmicScene,
+            this.holocard,
+            solarSystemData
+        );
 
         this.smoothScroll = new SmoothScroll();
     }
