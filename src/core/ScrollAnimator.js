@@ -49,12 +49,17 @@ export class ScrollAnimator {
         // Listen to state machine changes
         this.stateMachine.setOnStateChange((state) => {
             if (state) {
-                console.log(`[${new Date().toISOString()}] 🎯 State changed to: ${state.planet} card ${state.card} (index ${state.index})`);
+                // Update visuals and URL
                 this.updateVisualsForState(state);
                 this.updateUrl(state);
+
+                // ONLY scroll/snap if this was NOT a manual scroll
+                // If manual, user is already at the position roughly
+                if (!this.isManualScrolling) {
+                    this.scrollToState(state);
+                }
             } else {
                 // State is null -> God View
-                console.log(`[${new Date().toISOString()}] 🏠 State changed to: God View (Start)`);
                 this.returnToGodView();
                 // Clear URL via callback
                 if (this.urlUpdateCallback) this.urlUpdateCallback(null, null);
@@ -68,10 +73,7 @@ export class ScrollAnimator {
     goToNextState() {
         const newState = this.stateMachine.next();
         if (newState) {
-            console.log(`[${new Date().toISOString()}] ➡️ Next: Going to ${newState.planet} card ${newState.card}`);
             this.scrollToState(newState);
-        } else {
-            console.log(`[${new Date().toISOString()}] 🛑 Already at last state`);
         }
     }
 
@@ -113,6 +115,14 @@ export class ScrollAnimator {
      * Each planet has 4 cards at 0%, 33%, 66%, 99% of its 3vh range
      */
     scrollToState(state) {
+        // On mobile, the Holocard is the primary view/scroll container.
+        // We do NOT want to force-scroll the body, as it might cause loops/locking
+        // or interfere with the native Holocard scroll snap.
+        if (window.innerWidth <= 1024) {
+            // Just update tracking variables silently if needed
+            return;
+        }
+
         const vh = window.innerHeight;
         const heroHeight = vh; // Hero section is 1 viewport height
         const pinLength = vh * 3; // Each planet is pinned for 3vh (300%)
@@ -124,13 +134,10 @@ export class ScrollAnimator {
         // Pure calculation: hero + (planet sections before) + (progress within this planet)
         const targetScroll = heroHeight + (planetIndex * pinLength) + (cardProgress * pinLength);
 
-        console.log(`[${new Date().toISOString()}] 🔒 Navigating to ${state.planet} card ${state.card} | scroll: ${Math.round(targetScroll)}px`);
-
         this.isNavigating = true;
 
         const onComplete = () => {
             this.isNavigating = false;
-            console.log(`[${new Date().toISOString()}] 🔓 Navigation complete`);
         };
 
         // Use Lenis if available, otherwise fallback
@@ -287,9 +294,30 @@ export class ScrollAnimator {
                 start: 'top top',
                 end: '+=300%',
                 pin: true,
-                pinSpacing: true
-                // NO onUpdate - State Machine is the ONLY source of truth
-                // This eliminates all "fighting" between scroll position and state
+                pinSpacing: true,
+                onUpdate: (self) => {
+                    // Ignore updates if we are programmatically navigating (Next button)
+                    if (this.isNavigating) return;
+
+                    // Sync scroll progress to state machine
+                    const progress = self.progress;
+                    // Thresholds: slightly offset to favor the current card until clearly passed
+                    // 0.33 per card. 
+                    // <0.30=0, <0.60=1, <0.90=2, else 3
+                    const card = progress < 0.25 ? 0 :
+                        progress < 0.55 ? 1 :
+                            progress < 0.85 ? 2 : 3;
+
+                    const stateIndex = (this.stateMachine.planets.indexOf(planetId) * 4) + card;
+
+                    // Only update if different
+                    if (this.stateMachine.currentIndex !== stateIndex) {
+                        // Flag that this is a manual scroll update
+                        this.isManualScrolling = true;
+                        this.stateMachine.goTo(stateIndex);
+                        this.isManualScrolling = false;
+                    }
+                }
             });
         });
 

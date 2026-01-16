@@ -145,9 +145,22 @@ class App {
     }
 
     setupHolocardNavigation() {
-        // Navigation via state machine
+        // Navigation via state machine (Next Button)
         this.holocard.setNavigationCallback(() => {
             this.scrollAnimator.goToNextState();
+        });
+
+        // Mobile Scroll Navigation (Natural Scroll)
+        this.holocard.setUpdateStateCallback((planet, card) => {
+            // Update state machine
+            if (this.scrollAnimator) {
+                this.scrollAnimator.goToPlanetCard(planet, card);
+
+                // Ensure Next button is visible (since we skip body scroll triggers on mobile)
+                if (this.holocard.nextBtn) {
+                    this.holocard.nextBtn.classList.add('visible');
+                }
+            }
         });
     }
 

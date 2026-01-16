@@ -24,7 +24,7 @@ export class Holocard {
         `;
         document.body.appendChild(this.wrapper);
 
-        this.content = this.wrapper.querySelector('.holocard-content');
+        this.contentContainer = this.wrapper.querySelector('.holocard-content');
         this.leftPanel = this.wrapper.querySelector('.left-panel');
         this.centerPanel = this.wrapper.querySelector('.center-panel');
         this.rightPanel = this.wrapper.querySelector('.right-panel');
@@ -134,7 +134,39 @@ export class Holocard {
         this.wrapper.classList.add('hidden');
         this.isVisible = false;
 
+        // Reset scroll position for new planet
+        if (this.contentContainer) {
+            this.contentContainer.scrollTop = 0;
+
+            // Mobile Scroll Listener for State Sync
+            if (!this.scrollListenerAttached) {
+                this.contentContainer.addEventListener('scroll', () => {
+                    if (window.innerWidth > 1024) return; // Mobile only
+
+                    const height = this.contentContainer.clientHeight;
+                    const scroll = this.contentContainer.scrollTop;
+                    // Snap index: 0=Center, 1=Left, 2=Right
+                    const panelIndex = Math.round(scroll / height);
+
+                    // Map panel index to Card Number (1-based for state)
+                    // Panels array: [center, left, right] -> Card 1, 2, 3
+                    // So card = panelIndex + 1
+                    const card = panelIndex + 1;
+
+                    // Debounce/Throttling optional, but state machine handles dedup
+                    if (this.onUpdateState && this.isVisible) {
+                        this.onUpdateState(this.currentPlanet, card);
+                    }
+                });
+                this.scrollListenerAttached = true;
+            }
+        }
+
         console.log(`[${new Date().toISOString()}] 🎴 Prepared content for: ${data.id}`);
+    }
+
+    setUpdateStateCallback(callback) {
+        this.onUpdateState = callback;
     }
 
     /**
@@ -152,6 +184,13 @@ export class Holocard {
         }
 
         const panel = this.panels[this.visiblePanelCount];
+
+        // If panel is already visible (e.g. mobile scroll revealed it), just update count and skip anim
+        if (panel.style.opacity === '1' || window.getComputedStyle(panel).opacity === '1') {
+            this.visiblePanelCount++;
+            return true;
+        }
+
         // Directions match new panel order: center, left, right
         const directions = [
             { x: 0, y: 100 },   // Center panel from bottom
@@ -172,7 +211,16 @@ export class Holocard {
             }
         );
 
-        console.log(`[${new Date().toISOString()}] 🎴 Showing panel ${this.visiblePanelCount + 1}/3 for ${this.currentPlanet}`);
+        // On mobile, animate container scroll CONCURRENTLY with the panel fly-in
+        // This ensures the previous panel scrolls up AS the new one flies in
+        if (window.innerWidth <= 1024 && this.contentContainer) {
+            gsap.to(this.contentContainer, {
+                scrollTop: panel.offsetTop,
+                duration: 1.5,
+                ease: 'power3.out'
+            });
+        }
+
         this.visiblePanelCount++;
 
         return true;
@@ -209,7 +257,6 @@ export class Holocard {
             this.isVisible = false;
         }
 
-        console.log(`[${new Date().toISOString()}] 🎴 Hiding panel, now ${this.visiblePanelCount}/3 visible`);
         return true;
     }
 

@@ -820,9 +820,30 @@ body {
     .holocard-content {
         grid-template-columns: 1fr;
         height: auto;
-        max-height: 85vh;
-        overflow-y: auto;
-        padding-bottom: 50px;
+        max-height: 100vh;
+        /* Full height */
+        overflow-y: scroll;
+        padding-bottom: 0;
+        /* Remove padding, handled by panel margin/padding */
+        scroll-behavior: smooth;
+        /* Enable Scroll Snap */
+        scroll-snap-type: y mandatory;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .holo-panel {
+        min-height: 100vh;
+        /* Full viewport height for snap */
+        margin-bottom: 0;
+        scroll-snap-align: start;
+        scroll-snap-stop: always;
+        /* Vertical center content */
+        justify-content: center;
+        /* Equal top/bottom padding to center content */
+        padding-top: 80px;
+        padding-bottom: 80px;
+        /* Space for button */
+        box-sizing: border-box;
     }
 
     .center-panel {
@@ -831,10 +852,16 @@ body {
     }
 
     .holocard-next-btn {
-        bottom: 10px;
-        width: 40px;
-        height: 40px;
-        font-size: 1rem;
+        bottom: 30px;
+        /* Elevated for visibility */
+        z-index: 1000;
+        width: 50px;
+        height: 50px;
+        font-size: 1.2rem;
+        background: rgba(10, 15, 30, 0.9);
+        /* Darker background for contrast */
+        border: 1px solid var(--accent-color);
+        box-shadow: 0 0 15px rgba(0, 243, 255, 0.3);
     }
 }
 
