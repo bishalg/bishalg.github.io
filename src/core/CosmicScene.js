@@ -27,6 +27,10 @@ export class CosmicScene {
         this.mouse = new THREE.Vector2();
         this.onPlanetClick = null; // Callback for planet clicks
 
+        // Fallback mode for low-performance environments
+        this.useFallback = false;
+        this.fallbackPlanets = {};
+
         // Planet display names (with proper capitalization)
         this.planetDisplayNames = {
             sun: 'Sun',
@@ -41,6 +45,20 @@ export class CosmicScene {
             neptune: 'Neptune'
         };
 
+        // Planet colors for fallback mode
+        this.planetColors = {
+            sun: '#FFAA00',
+            mercury: '#8C7853',
+            venus: '#FFC649',
+            earth: '#6B93D6',
+            moon: '#C0C0C0',
+            mars: '#CD5C5C',
+            jupiter: '#D8CA9D',
+            saturn: '#FAD5A5',
+            uranus: '#4FD0E7',
+            neptune: '#4B70DD'
+        };
+
         this.simulationSpeed = 0.5; // Default fast speed for God View
         this.init();
     }
@@ -49,8 +67,13 @@ export class CosmicScene {
         this.createScene();
         this.createCamera();
         this.createRenderer();
-        this.createStars();
-        this.createLighting();
+
+        // Only create 3D elements if not in fallback mode
+        if (!this.useFallback) {
+            this.createStars();
+            this.createLighting();
+        }
+
         this.createLabelsContainer();
         this.createSolarSystem();
         this.setupClickHandler();
@@ -72,43 +95,58 @@ export class CosmicScene {
      * Setup click handler for planets
      */
     setupClickHandler() {
-        this.canvas.addEventListener('click', (event) => {
-            // Calculate mouse position in normalized device coordinates
-            const rect = this.canvas.getBoundingClientRect();
-            this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-            this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-            // Update raycaster
-            this.raycaster.setFromCamera(this.mouse, this.camera);
-
-            // Check for intersections with planets
-            const planetMeshes = Object.values(this.planets);
-            const intersects = this.raycaster.intersectObjects(planetMeshes, false);
-
-            if (intersects.length > 0) {
-                // Find which planet was clicked
-                const clickedMesh = intersects[0].object;
-                for (const [name, mesh] of Object.entries(this.planets)) {
-                    if (mesh === clickedMesh && this.onPlanetClick) {
+        if (this.useFallback) {
+            // Fallback mode: add click handlers to CSS planets
+            Object.entries(this.fallbackPlanets).forEach(([name, planet]) => {
+                planet.style.pointerEvents = 'auto';
+                planet.style.cursor = 'pointer';
+                planet.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    if (this.onPlanetClick) {
                         this.onPlanetClick(name);
-                        break;
+                    }
+                });
+            });
+        } else {
+            // 3D mode: use raycasting
+            this.canvas.addEventListener('click', (event) => {
+                // Calculate mouse position in normalized device coordinates
+                const rect = this.canvas.getBoundingClientRect();
+                this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+                // Update raycaster
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+
+                // Check for intersections with planets
+                const planetMeshes = Object.values(this.planets);
+                const intersects = this.raycaster.intersectObjects(planetMeshes, false);
+
+                if (intersects.length > 0) {
+                    // Find which planet was clicked
+                    const clickedMesh = intersects[0].object;
+                    for (const [name, mesh] of Object.entries(this.planets)) {
+                        if (mesh === clickedMesh && this.onPlanetClick) {
+                            this.onPlanetClick(name);
+                            break;
+                        }
                     }
                 }
-            }
-        });
+            });
 
-        // Change cursor on hover
-        this.canvas.addEventListener('mousemove', (event) => {
-            const rect = this.canvas.getBoundingClientRect();
-            this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-            this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            // Change cursor on hover
+            this.canvas.addEventListener('mousemove', (event) => {
+                const rect = this.canvas.getBoundingClientRect();
+                this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-            this.raycaster.setFromCamera(this.mouse, this.camera);
-            const planetMeshes = Object.values(this.planets);
-            const intersects = this.raycaster.intersectObjects(planetMeshes, false);
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+                const planetMeshes = Object.values(this.planets);
+                const intersects = this.raycaster.intersectObjects(planetMeshes, false);
 
-            this.canvas.style.cursor = intersects.length > 0 ? 'pointer' : 'default';
-        });
+                this.canvas.style.cursor = intersects.length > 0 ? 'pointer' : 'default';
+            });
+        }
     }
 
     /**
@@ -141,20 +179,131 @@ export class CosmicScene {
     }
 
     createRenderer() {
-        this.renderer = new THREE.WebGLRenderer({
-            canvas: this.canvas,
-            antialias: true,
-            alpha: false,
-            powerPreference: "high-performance"
+        // Check if WebGL is available and working
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        console.log('WebGL context available:', !!gl);
+
+        if (!gl) {
+            console.warn('WebGL not available, using fallback mode');
+            this.useFallback = true;
+            this.createFallbackPlanets();
+            return;
+        }
+
+        try {
+            this.renderer = new THREE.WebGLRenderer({
+                canvas: this.canvas,
+                antialias: true,
+                alpha: false,
+                powerPreference: "high-performance"
+            });
+
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+            this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, CONFIG.maxPixelRatio));
+            this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            this.renderer.toneMappingExposure = 1.0;
+            this.renderer.outputColorSpace = THREE.SRGBColorSpace; // r160+
+            this.renderer.shadowMap.enabled = true;
+            this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // Test render to ensure WebGL works
+            this.renderer.render(this.scene, this.camera);
+
+        } catch (error) {
+            console.warn('WebGL renderer failed, using fallback mode:', error);
+            this.useFallback = true;
+            this.createFallbackPlanets();
+        }
+    }
+
+    /**
+     * Create CSS/HTML fallback planets when WebGL is not available
+     */
+    createFallbackPlanets() {
+        // Create container for fallback planets
+        this.fallbackContainer = document.createElement('div');
+        this.fallbackContainer.className = 'fallback-planets-container';
+        this.fallbackContainer.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: -1;
+        `;
+        document.body.appendChild(this.fallbackContainer);
+
+        // Create fallback planet elements
+        const planetConfigs = [
+            { id: 'sun', distance: 0, size: 20 },
+            { id: 'mercury', distance: 30, size: 3 },
+            { id: 'venus', distance: 45, size: 5 },
+            { id: 'earth', distance: 60, size: 5 },
+            { id: 'mars', distance: 80, size: 4 },
+            { id: 'jupiter', distance: 120, size: 12 },
+            { id: 'saturn', distance: 160, size: 10 },
+            { id: 'uranus', distance: 200, size: 7 },
+            { id: 'neptune', distance: 240, size: 7 }
+        ];
+
+        planetConfigs.forEach(config => {
+            const planet = document.createElement('div');
+            planet.className = `fallback-planet fallback-planet--${config.id}`;
+            planet.style.cssText = `
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                width: ${config.size}px;
+                height: ${config.size}px;
+                border-radius: 50%;
+                background: ${this.planetColors[config.id]};
+                box-shadow: 0 0 ${config.size * 2}px ${this.planetColors[config.id]};
+                transform: translate(-50%, -50%) translate(${config.distance}px, 0px);
+                opacity: 0.8;
+            `;
+
+            // Add glow effect for sun
+            if (config.id === 'sun') {
+                planet.style.boxShadow = `0 0 ${config.size * 3}px ${this.planetColors[config.id]}, 0 0 ${config.size * 6}px ${this.planetColors[config.id]}40`;
+                planet.style.animation = 'fallback-sun-glow 4s ease-in-out infinite alternate';
+            }
+
+            this.fallbackContainer.appendChild(planet);
+            this.fallbackPlanets[config.id] = planet;
         });
 
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, CONFIG.maxPixelRatio));
-        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = 1.0;
-        this.renderer.outputEncoding = THREE.sRGBEncoding;
-        this.renderer.shadowMap.enabled = true;
-        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        // Add CSS animation for sun glow
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes fallback-sun-glow {
+                0% { opacity: 0.8; transform: translate(-50%, -50%) scale(1); }
+                100% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Add fallback indicator
+        const indicator = document.createElement('div');
+        indicator.textContent = '2D Mode';
+        indicator.style.cssText = `
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #00f3ff;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: 'Courier Prime', monospace;
+            z-index: 1000;
+            pointer-events: none;
+        `;
+        document.body.appendChild(indicator);
+
+        console.log('✅ Created fallback planets for low-performance environment');
+        console.log('Fallback planets:', Object.keys(this.fallbackPlanets));
     }
 
     createStars() {
@@ -213,18 +362,30 @@ export class CosmicScene {
     }
 
     createLighting() {
-        const ambientLight = new THREE.AmbientLight(0x404050, 0.4);
+        // Soft Ambient Light (Base visibility)
+        // Increased to 0.6 so the "dark side" is visible, just shadowed
+        const ambientLight = new THREE.AmbientLight(0x404050, 0.6);
         this.scene.add(ambientLight);
 
-        const sunLight = new THREE.PointLight(0xffddaa, 2.5, 600);
+        // Hemisphere Light (Natural fill - Sky/Ground)
+        // Adds subtle variation to shadows so they aren't flat black
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444455, 0.4);
+        this.scene.add(hemiLight);
+
+        // Bright point light at 0,0,0 (The Sun)
+        const sunLight = new THREE.PointLight(0xffddaa, 2.5, 0, 0);
         sunLight.position.set(0, 0, 0);
         sunLight.castShadow = true;
+
+        // Improve shadow resolution
         sunLight.shadow.mapSize.width = 2048;
         sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.bias = -0.0001;
+
         this.scene.add(sunLight);
 
-        // Rim light
-        const rimLight = new THREE.DirectionalLight(0x4455ff, 0.15);
+        // Rim light (Backlight for definition - reduced contribution)
+        const rimLight = new THREE.DirectionalLight(0x4455ff, 0.3);
         rimLight.position.set(0, 50, 50);
         this.scene.add(rimLight);
     }
@@ -237,12 +398,28 @@ export class CosmicScene {
 
         const geometry = new THREE.SphereGeometry(radius, 64, 64);
 
-        // Use MeshBasicMaterial for guaranteed visibility (no lighting required)
-        const material = new THREE.MeshBasicMaterial({
-            color: new THREE.Color(color || 0xffffff)
-        });
+        let material;
+        // Sun uses MeshBasicMaterial to glow (self-illuminated)
+        if (config.name === 'sun') {
+            material = new THREE.MeshBasicMaterial({
+                color: new THREE.Color(color || 0xffffff)
+            });
+        } else {
+            // Planets use MeshStandardMaterial to react to sunlight (Day/Night cycle)
+            material = new THREE.MeshStandardMaterial({
+                color: new THREE.Color(color || 0xffffff),
+                roughness: 0.8, // Dusty/Rock surface feel
+                metalness: 0.1
+            });
+        }
 
         const mesh = new THREE.Mesh(geometry, material);
+
+        // Enable Shadows for realism
+        if (config.name !== 'sun') {
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+        }
 
         // Try to load texture asynchronously
         if (texture) {
@@ -250,6 +427,8 @@ export class CosmicScene {
                 texture,
                 (loadedTex) => {
                     console.log(`✅ Texture loaded: ${texture}`);
+                    // Ensure texture encoding is correct for StandardMaterial (r160+)
+                    loadedTex.colorSpace = THREE.SRGBColorSpace;
                     material.map = loadedTex;
                     material.needsUpdate = true;
                 },
@@ -306,39 +485,58 @@ export class CosmicScene {
         if (!this.labelsContainer) return;
 
         for (const [name, label] of Object.entries(this.planetLabels)) {
-            const group = this.orbitGroups[name];
-            if (!group) continue;
+            let screenX = 0;
+            let screenY = 0;
 
-            // Get world position of planet
-            const worldPos = new THREE.Vector3();
-            group.getWorldPosition(worldPos);
+            if (this.useFallback) {
+                // Fallback mode: calculate position from CSS fallback planets
+                const fallbackPlanet = this.fallbackPlanets[name];
+                if (fallbackPlanet) {
+                    const rect = fallbackPlanet.getBoundingClientRect();
+                    screenX = rect.left + rect.width / 2;
+                    screenY = rect.top - 20; // Position above the planet
+                } else {
+                    // Default center position if planet not found
+                    screenX = window.innerWidth / 2;
+                    screenY = window.innerHeight / 2;
+                }
+            } else {
+                // 3D mode: project 3D position to screen
+                const group = this.orbitGroups[name];
+                if (!group) continue;
 
-            // Add offset above the planet based on radius
-            const radius = parseFloat(label.dataset.radius) || 3;
-            worldPos.y += radius * 1.5;
+                // Get world position of planet
+                const worldPos = new THREE.Vector3();
+                group.getWorldPosition(worldPos);
 
-            // Project to screen coordinates
-            const screenPos = worldPos.clone().project(this.camera);
+                // Add offset above the planet based on radius
+                const radius = parseFloat(label.dataset.radius) || 3;
+                worldPos.y += radius * 1.5;
 
-            // Check if behind camera
-            if (screenPos.z > 1) {
-                label.style.display = 'none';
-                continue;
+                // Project to screen coordinates
+                const screenPos = worldPos.clone().project(this.camera);
+
+                // Check if behind camera
+                if (screenPos.z > 1) {
+                    label.style.display = 'none';
+                    continue;
+                }
+
+                // Convert to CSS coordinates
+                screenX = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
+                screenY = (screenPos.y * -0.5 + 0.5) * window.innerHeight;
             }
 
-            // Convert to CSS coordinates
-            const x = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
-            const y = (screenPos.y * -0.5 + 0.5) * window.innerHeight;
-
             // Check if on screen
-            if (x < -50 || x > window.innerWidth + 50 || y < -50 || y > window.innerHeight + 50) {
+            if (screenX < -50 || screenX > window.innerWidth + 50 ||
+                screenY < -50 || screenY > window.innerHeight + 50) {
                 label.style.display = 'none';
                 continue;
             }
 
             label.style.display = 'block';
-            label.style.left = `${x}px`;
-            label.style.top = `${y}px`;
+            label.style.left = `${screenX}px`;
+            label.style.top = `${screenY}px`;
         }
     }
 
@@ -396,18 +594,21 @@ export class CosmicScene {
             if (key === 'moon') return; // Handle moon separately
 
             const config = p[key];
-            const result = this.createPlanet(config);
 
-            this.planets[key] = result.mesh;
-            this.orbitGroups[key] = result.group;
-            this.scene.add(result.group);
+            // Only create 3D objects if not in fallback mode
+            if (!this.useFallback) {
+                const result = this.createPlanet(config);
+                this.planets[key] = result.mesh;
+                this.orbitGroups[key] = result.group;
+                this.scene.add(result.group);
 
-            // Create label for planet
+                // Extras for Sun/Earth
+                if (key === 'sun') this.addSunGlow();
+                if (key === 'earth') this.addEarthAtmosphere();
+            }
+
+            // Always create labels for click interaction
             this.createPlanetLabel(key, config.radius);
-
-            // Extras for Sun/Earth
-            if (key === 'sun') this.addSunGlow();
-            if (key === 'earth') this.addEarthAtmosphere();
         });
 
         // Handle Moon (attached to Earth Group)
@@ -479,23 +680,42 @@ export class CosmicScene {
             const mesh = this.planets[key];
             const group = this.orbitGroups[key];
 
-            // Self Rotation (Subtle)
-            if (mesh) {
-                mesh.rotation.y += config.rotationSpeed * this.simulationSpeed;
-            }
-
-            // Orbital Revolution
-            if (group && key !== 'sun' && key !== 'moon') {
+            // Update orbital positions for both 3D and fallback modes
+            if (key !== 'sun' && key !== 'moon') {
                 config.angle += config.speed * this.simulationSpeed;
-                group.position.x = Math.cos(config.angle) * config.distance;
-                group.position.z = Math.sin(config.angle) * config.distance;
+                const x = Math.cos(config.angle) * config.distance;
+                const z = Math.sin(config.angle) * config.distance;
+
+                // 3D mode: update Three.js objects
+                if (!this.useFallback && group) {
+                    group.position.x = x;
+                    group.position.z = z;
+                }
+
+                // Fallback mode: update CSS positions
+                if (this.useFallback && this.fallbackPlanets[key]) {
+                    const planet = this.fallbackPlanets[key];
+                    planet.style.transform = `translate(-50%, -50%) translate(${x * 2}px, ${z * 2}px)`;
+                }
             }
 
-            // Moon Orbit around Earth
+            // Moon orbit (relative to Earth)
             if (key === 'moon' && group) {
                 config.angle += config.speed * this.simulationSpeed;
-                group.position.x = Math.cos(config.angle) * config.distance;
-                group.position.z = Math.sin(config.angle) * config.distance;
+                const x = Math.cos(config.angle) * config.distance;
+                const z = Math.sin(config.angle) * config.distance;
+
+                if (!this.useFallback) {
+                    group.position.x = x;
+                    group.position.z = z;
+                }
+
+                // Note: Moon fallback positioning would be complex, so we'll skip it for now
+            }
+
+            // Self Rotation (3D mode only)
+            if (!this.useFallback && mesh) {
+                mesh.rotation.y += config.rotationSpeed * this.simulationSpeed;
             }
         });
 
@@ -509,7 +729,11 @@ export class CosmicScene {
 
     render() {
         this.update();
-        this.renderer.render(this.scene, this.camera);
+
+        // Only render 3D scene if not in fallback mode
+        if (!this.useFallback && this.renderer) {
+            this.renderer.render(this.scene, this.camera);
+        }
     }
 
     setCameraTarget(targetVector) {

@@ -1,34 +1,50 @@
 /**
  * ScrollStateMachine.js
  * Pure state machine for scroll navigation - NO DOM, NO GSAP
- * 
+ *
  * State Structure:
- * - 9 planets × 4 cards = 36 total states (0-35)
+ * - 9 planets × variable cards per planet
  * - Each state: { index, planet, card }
- * - card: 0 = planet focus, 1-3 = card panels
+ * - card: 0 = planet focus, 1-n = card stack (variable per planet)
  */
 
 export class ScrollStateMachine {
     constructor() {
         // Define planet order
         this.planets = ['earth', 'sun', 'moon', 'mars', 'mercury', 'jupiter', 'venus', 'saturn', 'neptune'];
-        this.cardsPerPlanet = 4; // 0=focus, 1=card1, 2=card2, 3=card3
-        this.totalStates = this.planets.length * this.cardsPerPlanet; // 36
 
-        // Build states array
+        // Standardized to 3 cards per planet
+        this.cardsPerPlanet = {
+            earth: 3,      // Stats, Personal, Professional
+            sun: 3,        // Stats, Personal, Professional
+            moon: 3,       // Stats, Personal, Professional
+            mars: 3,       // Stats, Personal, Professional
+            mercury: 3,    // Stats, Personal, Professional
+            jupiter: 3,    // Stats, Personal, Professional
+            venus: 3,      // Stats, Personal, Professional
+            saturn: 3,     // Stats, Personal, Professional
+            neptune: 3     // Stats, Personal, Professional
+        };
+
+        // Build states array dynamically based on cards per planet
         this.states = [];
         for (let i = 0; i < this.planets.length; i++) {
-            for (let c = 0; c < this.cardsPerPlanet; c++) {
+            const planet = this.planets[i];
+            const cardCount = this.cardsPerPlanet[planet];
+
+            for (let c = 0; c < cardCount; c++) {
                 this.states.push({
                     index: this.states.length,
-                    planet: this.planets[i],
+                    planet: planet,
                     card: c
                 });
             }
         }
 
-        // Current state index (-1 = God View/Start)
-        this.currentIndex = -1;
+        this.totalStates = this.states.length;
+
+        // Current state index (0 = earth, card 0)
+        this.currentIndex = 0;
 
         // Callbacks for state changes
         this.onStateChange = null;
@@ -43,10 +59,8 @@ export class ScrollStateMachine {
 
     /**
      * Get current state
-     * Returns null if at God View (-1)
      */
     getState() {
-        if (this.currentIndex === -1) return null;
         return this.states[this.currentIndex];
     }
 
@@ -73,11 +87,11 @@ export class ScrollStateMachine {
 
     /**
      * Move to previous state
-     * Returns new state, or null (God View) if going back from 0
+     * Returns new state, or null if already at start
      */
     prev() {
-        if (this.currentIndex <= -1) {
-            return null; // Already at start/God View
+        if (this.currentIndex <= 0) {
+            return null; // Already at start
         }
         this.currentIndex--;
         this._notifyChange();
@@ -104,8 +118,16 @@ export class ScrollStateMachine {
         const planetIndex = this.planets.indexOf(planet);
         if (planetIndex === -1) return null;
 
-        const clampedCard = Math.max(0, Math.min(card, this.cardsPerPlanet - 1));
-        const stateIndex = (planetIndex * this.cardsPerPlanet) + clampedCard;
+        const maxCardsForPlanet = this.cardsPerPlanet[planet] || 3;
+        const clampedCard = Math.max(0, Math.min(card, maxCardsForPlanet - 1));
+
+        // Calculate state index by summing up cards from previous planets
+        let stateIndex = 0;
+        for (let i = 0; i < planetIndex; i++) {
+            stateIndex += this.cardsPerPlanet[this.planets[i]];
+        }
+        stateIndex += clampedCard;
+
         return this.goTo(stateIndex);
     }
 
@@ -115,8 +137,25 @@ export class ScrollStateMachine {
     getIndexFor(planet, card) {
         const planetIndex = this.planets.indexOf(planet);
         if (planetIndex === -1) return -1;
-        const clampedCard = Math.max(0, Math.min(card, this.cardsPerPlanet - 1));
-        return (planetIndex * this.cardsPerPlanet) + clampedCard;
+
+        const maxCardsForPlanet = this.cardsPerPlanet[planet] || 3;
+        const clampedCard = Math.max(0, Math.min(card, maxCardsForPlanet - 1));
+
+        // Calculate state index by summing up cards from previous planets
+        let stateIndex = 0;
+        for (let i = 0; i < planetIndex; i++) {
+            stateIndex += this.cardsPerPlanet[this.planets[i]];
+        }
+        stateIndex += clampedCard;
+
+        return stateIndex;
+    }
+
+    /**
+     * Get the number of cards for a specific planet
+     */
+    getCardsForPlanet(planet) {
+        return this.cardsPerPlanet[planet] || 3;
     }
 
     /**
@@ -136,11 +175,11 @@ export class ScrollStateMachine {
     }
 
     /**
-     * Reset to initial state (God View)
+     * Reset to initial state
      */
     reset() {
-        if (this.currentIndex !== -1) {
-            this.currentIndex = -1;
+        if (this.currentIndex !== 0) {
+            this.currentIndex = 0;
             this._notifyChange();
         }
     }

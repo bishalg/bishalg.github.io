@@ -65,7 +65,7 @@ class App {
 
     // Valid planet IDs for URL validation
     static VALID_PLANETS = ['earth', 'sun', 'moon', 'mars', 'mercury', 'jupiter', 'venus', 'saturn', 'neptune'];
-    static MAX_CARDS = 3;
+    static MAX_CARDS = 3; // Standardized to 3 cards per planet
 
     /**
      * Setup URL state sync - read params on load, update on scroll
@@ -160,6 +160,13 @@ class App {
                 if (this.holocard.nextBtn) {
                     this.holocard.nextBtn.classList.add('visible');
                 }
+            }
+        });
+
+        // Card swipe navigation (advance to next card)
+        this.holocard.setCardAdvanceCallback(() => {
+            if (this.scrollAnimator) {
+                this.scrollAnimator.goToNextState();
             }
         });
     }

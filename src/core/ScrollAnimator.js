@@ -104,35 +104,43 @@ export class ScrollAnimator {
     /**
      * Calculate scroll position for a state and scroll there
      * Uses PURE LAYOUT MATH - no DOM offsets (unreliable with GSAP pinning)
-     * 
+     *
      * Layout:
      * - Hero: 0 to 1vh
-     * - Earth (planet 0): 1vh to 4vh (3vh pinned)
-     * - Sun (planet 1): 4vh to 7vh (3vh pinned)
-     * - Moon (planet 2): 7vh to 10vh (3vh pinned)
-     * - etc.
-     * 
-     * Each planet has 4 cards at 0%, 33%, 66%, 99% of its 3vh range
+     * - Each planet: pinned for (cards-1)*100% scroll distance
      */
     scrollToState(state) {
         // On mobile, the Holocard is the primary view/scroll container.
         // We do NOT want to force-scroll the body, as it might cause loops/locking
         // or interfere with the native Holocard scroll snap.
+        // But we still need to show the cards initially.
         if (window.innerWidth <= 1024) {
-            // Just update tracking variables silently if needed
+            // For mobile, just ensure cards are visible but don't force scroll
+            if (this.holocard.currentPlanet !== state.planet) {
+                this.holocard.prepareContent(this.solarSystemData[state.planet]);
+                this.holocard.showNextPanel();
+            }
             return;
         }
 
         const vh = window.innerHeight;
         const heroHeight = vh; // Hero section is 1 viewport height
-        const pinLength = vh * 3; // Each planet is pinned for 3vh (300%)
 
         const planetIndex = this.stateMachine.planets.indexOf(state.planet);
-        const progressPerCard = 0.33;
-        const cardProgress = state.card * progressPerCard;
+        const cardsForPlanet = this.stateMachine.getCardsForPlanet(state.planet);
+        const pinLength = vh * (cardsForPlanet - 1); // Each planet pinned for (cards-1) vh
 
-        // Pure calculation: hero + (planet sections before) + (progress within this planet)
-        const targetScroll = heroHeight + (planetIndex * pinLength) + (cardProgress * pinLength);
+        // Calculate scroll position up to previous planets
+        let targetScroll = heroHeight;
+        for (let i = 0; i < planetIndex; i++) {
+            const prevPlanetCards = this.stateMachine.getCardsForPlanet(this.stateMachine.planets[i]);
+            targetScroll += vh * (prevPlanetCards - 1);
+        }
+
+        // Add progress within current planet
+        const cardProgress = state.card / Math.max(cardsForPlanet - 1, 1);
+        targetScroll += cardProgress * pinLength;
+
 
         this.isNavigating = true;
 
@@ -169,23 +177,14 @@ export class ScrollAnimator {
         // Focus camera on planet (Slows down simulation for stability)
         this.focusOnPlanet(planet, offset);
 
-        // Prepare content if new planet
+        // Prepare content if new planet (creates all cards for the planet)
         if (this.holocard.currentPlanet !== planet) {
             this.holocard.prepareContent(data);
         }
 
-        // Set visible panel count to match card number
-        // card 0 = 0 panels, card 1 = 1 panel, etc.
-        // But our UI shows Card 1 for card=1, so visiblePanelCount = card
-        const targetPanels = card;
-
-        // Adjust panels
-        while (this.holocard.visiblePanelCount < targetPanels) {
-            this.holocard.showNextPanel();
-        }
-        while (this.holocard.visiblePanelCount > targetPanels) {
-            this.holocard.hideLastPanel();
-        }
+        // Show the specific card based on the card parameter
+        // card=0: show card 0, card=1: show card 1, etc.
+        this.holocard.showSpecificCard(card);
     }
 
     /**
@@ -289,10 +288,13 @@ export class ScrollAnimator {
         // Planet sections - ONLY pinning, NO state sync (state machine is sole driver)
         const planets = this.stateMachine.planets;
         planets.forEach((planetId) => {
+            const cardsForPlanet = this.stateMachine.getCardsForPlanet(planetId);
+            const scrollDistance = `${(cardsForPlanet - 1) * 100}%`; // Dynamic scroll distance based on card count
+
             ScrollTrigger.create({
                 trigger: `.scene--${planetId}`,
                 start: 'top top',
-                end: '+=300%',
+                end: `+=${scrollDistance}`,
                 pin: true,
                 pinSpacing: true,
                 onUpdate: (self) => {
@@ -301,14 +303,16 @@ export class ScrollAnimator {
 
                     // Sync scroll progress to state machine
                     const progress = self.progress;
-                    // Thresholds: slightly offset to favor the current card until clearly passed
-                    // 0.33 per card. 
-                    // <0.30=0, <0.60=1, <0.90=2, else 3
-                    const card = progress < 0.25 ? 0 :
-                        progress < 0.55 ? 1 :
-                            progress < 0.85 ? 2 : 3;
+                    const cardThreshold = 1 / cardsForPlanet;
+                    const card = Math.min(Math.floor(progress / cardThreshold), cardsForPlanet - 1);
 
-                    const stateIndex = (this.stateMachine.planets.indexOf(planetId) * 4) + card;
+                    // Calculate state index for this planet and card
+                    const planetIndex = this.stateMachine.planets.indexOf(planetId);
+                    let stateIndex = 0;
+                    for (let i = 0; i < planetIndex; i++) {
+                        stateIndex += this.stateMachine.getCardsForPlanet(this.stateMachine.planets[i]);
+                    }
+                    stateIndex += card;
 
                     // Only update if different
                     if (this.stateMachine.currentIndex !== stateIndex) {

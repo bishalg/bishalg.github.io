@@ -18,6 +18,7 @@ export function createStatGrid(data) {
     return `
         <div class="panel-header">
             <h3>TELEMETRY</h3>
+            <h3 class="subtitle">Statistics & Orbital Data</h3>
         </div>
         <div class="stat-grid">
             ${stats.map(stat => `

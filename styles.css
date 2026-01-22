@@ -611,40 +611,151 @@ body {
     z-index: -1;
 }
 
-.holocard-content {
-    display: grid;
-    grid-template-columns: 1fr 1.2fr 1fr;
-    gap: 20px;
-    width: 90vw;
-    max-width: 1400px;
-    height: 70vh;
+.holocard-stack {
+    position: relative;
+    width: 100%;
+    height: 100%;
     pointer-events: auto;
-    transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.5s ease;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
-.holo-panel {
-    background: rgba(10, 15, 30, 0.7);
+.holo-card {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(10, 15, 30, 0.8);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
+    border-radius: 16px;
     padding: 24px;
+    width: 350px;
+    max-height: 500px;
     display: flex;
     flex-direction: column;
-    position: relative;
     overflow: hidden;
-    backdrop-filter: blur(16px);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    backdrop-filter: blur(20px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    will-change: transform;
+    cursor: grab;
 }
 
-.holo-panel::before {
+.holo-card::before {
     content: '';
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
-    height: 2px;
+    height: 3px;
     background: var(--accent-color, #00f3ff);
-    box-shadow: 0 0 15px var(--accent-color);
+    box-shadow: 0 0 20px var(--accent-color);
+}
+
+.holo-card.dragging {
+    cursor: grabbing;
+    transition: none;
+}
+
+.holo-card .card-header {
+    margin-bottom: 24px;
+    text-align: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 16px;
+}
+
+.holo-card .card-header h2 {
+    font-family: 'Cinzel', serif;
+    font-size: 2.2rem;
+    margin: 0;
+    color: var(--accent-color);
+    text-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.holo-card .card-content {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+
+.holo-card .card-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.holo-card .card-content::-webkit-scrollbar-thumb {
+    background: var(--accent-color);
+    border-radius: 2px;
+}
+
+.holo-card .card-content::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+/* Insights Card Styles */
+.insights-content {
+    padding: 16px 0;
+}
+
+.insights-content h3 {
+    font-family: 'Cinzel', serif;
+    color: var(--accent-color);
+    font-size: 1.5rem;
+    margin: 0 0 20px 0;
+    text-align: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 10px;
+}
+
+.project-highlight, .podcast-highlight {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+    transition: all 0.3s ease;
+}
+
+.project-highlight:hover, .podcast-highlight:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--accent-color);
+    transform: translateX(5px);
+}
+
+.project-highlight strong {
+    color: #fff;
+    font-family: 'Cinzel', serif;
+    display: block;
+    margin-bottom: 8px;
+    font-size: 1.1rem;
+}
+
+.project-highlight p {
+    color: #aaccff;
+    font-family: 'Courier Prime', monospace;
+    margin: 8px 0;
+    line-height: 1.5;
+}
+
+.project-highlight small {
+    color: #667788;
+    font-family: 'Courier Prime', monospace;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 1px;
+}
+
+.pod-title {
+    color: #fff;
+    font-weight: bold;
+    font-size: 0.9rem;
+    margin-bottom: 4px;
+}
+
+.pod-context {
+    color: #8899aa;
+    font-size: 0.75rem;
+    text-transform: uppercase;
 }
 
 .center-panel {
@@ -743,6 +854,44 @@ body {
     letter-spacing: 2px;
 }
 
+/* Fallback Circle for when WebGL is not available */
+.fallback-circle {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: radial-gradient(circle at center,
+        rgba(255, 255, 255, 0.1) 0%,
+        rgba(255, 255, 255, 0.05) 50%,
+        transparent 100%);
+    border: 2px solid var(--accent-color);
+    box-shadow: 0 0 30px var(--accent-color) inset, 0 0 20px var(--accent-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: pulseObj 4s infinite ease-in-out;
+}
+
+.fallback-circle-content {
+    text-align: center;
+    color: var(--accent-color);
+}
+
+.fallback-circle-symbol {
+    font-size: 2rem;
+    font-weight: bold;
+    font-family: 'Cinzel', serif;
+    text-shadow: 0 0 15px var(--accent-color);
+    margin-bottom: 5px;
+}
+
+.fallback-circle-label {
+    font-size: 0.8rem;
+    font-family: 'Courier Prime', monospace;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.8;
+}
+
 .personal-narrative {
     text-align: center;
     margin-top: 20px;
@@ -816,39 +965,50 @@ body {
     text-transform: uppercase;
 }
 
+/* Desktop Card Stack Styles */
+@media (min-width: 1025px) {
+    .holocard-stack {
+        position: relative;
+        width: 400px;
+        height: 600px;
+    }
+
+    .holo-card {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        max-width: 400px;
+    }
+}
+
 @media (max-width: 1024px) {
-    .holocard-content {
-        grid-template-columns: 1fr;
+    .holocard-stack {
+        width: 95vw;
         height: auto;
         max-height: 100vh;
-        /* Full height */
         overflow-y: scroll;
-        padding-bottom: 0;
-        /* Remove padding, handled by panel margin/padding */
         scroll-behavior: smooth;
         /* Enable Scroll Snap */
         scroll-snap-type: y mandatory;
         -webkit-overflow-scrolling: touch;
     }
 
-    .holo-panel {
+    .holo-card {
+        position: relative;
+        width: 100%;
         min-height: 100vh;
         /* Full viewport height for snap */
         margin-bottom: 0;
         scroll-snap-align: start;
         scroll-snap-stop: always;
-        /* Vertical center content */
+        /* Center content vertically */
         justify-content: center;
-        /* Equal top/bottom padding to center content */
         padding-top: 80px;
         padding-bottom: 80px;
         /* Space for button */
         box-sizing: border-box;
-    }
-
-    .center-panel {
-        transform: none;
-        order: -1;
+        /* Reset stack positioning for mobile */
+        transform: none !important;
     }
 
     .holocard-next-btn {

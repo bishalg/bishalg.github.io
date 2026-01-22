@@ -5,7 +5,7 @@ import gsap from 'gsap';
 
 /**
  * Holocard - Holographic CV Card Component
- * Displays planet-specific content with sequential panel fly-in animation
+ * Displays planet-specific content in a stack-based card system (Tinder-style)
  */
 export class Holocard {
     constructor() {
@@ -16,18 +16,13 @@ export class Holocard {
         this.wrapper.className = 'holocard-wrapper hidden';
         this.wrapper.innerHTML = `
             <div class="holocard-backdrop"></div>
-            <div class="holocard-content">
-                <div class="holo-panel left-panel"></div>
-                <div class="holo-panel center-panel"></div>
-                <div class="holo-panel right-panel"></div>
+            <div class="holocard-stack">
+                <!-- Cards will be dynamically added here -->
             </div>
         `;
         document.body.appendChild(this.wrapper);
 
-        this.contentContainer = this.wrapper.querySelector('.holocard-content');
-        this.leftPanel = this.wrapper.querySelector('.left-panel');
-        this.centerPanel = this.wrapper.querySelector('.center-panel');
-        this.rightPanel = this.wrapper.querySelector('.right-panel');
+        this.stackContainer = this.wrapper.querySelector('.holocard-stack');
 
         // Create Next button as a fixed element (always visible)
         this.nextBtn = document.createElement('button');
@@ -36,11 +31,11 @@ export class Holocard {
         this.nextBtn.innerHTML = '→';
         document.body.appendChild(this.nextBtn);
 
-        // Order: center first, then left, then right (center panel loads first)
-        this.panels = [this.centerPanel, this.leftPanel, this.rightPanel];
+        this.cards = []; // Array to hold card elements
         this.isVisible = false;
         this.currentPlanet = null;
-        this.visiblePanelCount = 0;
+        this.currentCardIndex = 0;
+        this.maxCardsInStack = 4; // Support up to 4 cards in stack
 
         // Callback for scroll navigation (set from main.js)
         this.onNavigateToNext = null;
@@ -49,11 +44,15 @@ export class Holocard {
         // 3D Planet Preview
         this.planetPreview = new PlanetPreview();
 
-        // Hide all panels initially
-        this.panels.forEach(panel => {
-            panel.style.opacity = '0';
-            panel.style.transform = 'translateY(100px)';
-        });
+        // Swipe/drag interaction variables
+        this.isDragging = false;
+        this.dragStartX = 0;
+        this.dragStartY = 0;
+        this.currentTranslateX = 0;
+        this.currentTranslateY = 0;
+
+        // Callback for when card is swiped away
+        this.onCardAdvance = null;
 
         // Close on backdrop click
         this.wrapper.querySelector('.holocard-backdrop').addEventListener('click', () => this.hide());
@@ -70,6 +69,151 @@ export class Holocard {
                 this.isClicking = false;
                 this.nextBtn.classList.remove('disabled');
             }, 400); // 400ms debounce
+        });
+
+        // Setup swipe/drag interactions
+        this.setupSwipeHandlers();
+    }
+
+    /**
+     * Setup swipe and drag handlers for card interactions
+     */
+    setupSwipeHandlers() {
+        // Mouse events for desktop
+        this.wrapper.addEventListener('mousedown', (e) => this.handlePointerDown(e));
+        this.wrapper.addEventListener('mousemove', (e) => this.handlePointerMove(e));
+        this.wrapper.addEventListener('mouseup', (e) => this.handlePointerUp(e));
+        this.wrapper.addEventListener('mouseleave', (e) => this.handlePointerUp(e));
+
+        // Touch events for mobile
+        this.wrapper.addEventListener('touchstart', (e) => this.handlePointerDown(e), { passive: false });
+        this.wrapper.addEventListener('touchmove', (e) => this.handlePointerMove(e), { passive: false });
+        this.wrapper.addEventListener('touchend', (e) => this.handlePointerUp(e), { passive: false });
+    }
+
+    /**
+     * Handle pointer down event (mouse or touch)
+     */
+    handlePointerDown(e) {
+        if (!this.isVisible || this.cards.length === 0) return;
+
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+        this.isDragging = true;
+        this.dragStartX = clientX;
+        this.dragStartY = clientY;
+        this.currentTranslateX = 0;
+        this.currentTranslateY = 0;
+
+        // Add dragging class to top card
+        const topCard = this.cards[0]; // Top card is always index 0
+        if (topCard) {
+            topCard.classList.add('dragging');
+        }
+    }
+
+    /**
+     * Handle pointer move event (mouse or touch)
+     */
+    handlePointerMove(e) {
+        if (!this.isDragging || this.cards.length === 0) return;
+
+        e.preventDefault();
+
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+        this.currentTranslateX = clientX - this.dragStartX;
+        this.currentTranslateY = clientY - this.dragStartY;
+
+        // Apply transform to top card
+        const topCard = this.cards[0]; // Top card is always index 0
+        if (topCard) {
+            const rotation = this.currentTranslateX * 0.1; // Slight rotation based on horizontal movement
+            // Apply drag transform on top of the base centering transform
+            topCard.style.transform = `translate(-50%, -50%) translate(${this.currentTranslateX}px, ${this.currentTranslateY}px) rotate(${rotation}deg)`;
+        }
+    }
+
+    /**
+     * Handle pointer up event (mouse or touch)
+     */
+    handlePointerUp(e) {
+        if (!this.isDragging || this.cards.length === 0) return;
+
+        this.isDragging = false;
+
+        const topCard = this.cards[0]; // Top card is always index 0
+        if (!topCard) return;
+
+        topCard.classList.remove('dragging');
+
+        // Check if swipe distance is enough to trigger card removal
+        const swipeThreshold = 50; // Reduced for easier testing
+        const isSwipeLeft = this.currentTranslateX < -swipeThreshold;
+        const isSwipeRight = this.currentTranslateX > swipeThreshold;
+
+        if (isSwipeLeft || isSwipeRight) {
+            // Animate card off screen
+            const direction = isSwipeLeft ? -1 : 1;
+            gsap.to(topCard, {
+                x: direction * window.innerWidth,
+                rotation: direction * 45,
+                duration: 0.5,
+                ease: 'power2.out',
+                onComplete: () => {
+                    // Remove the dismissed card and advance to next card
+                    this.removeDismissedCard(topCard);
+                    if (this.onCardAdvance) {
+                        this.onCardAdvance();
+                    }
+                }
+            });
+        } else {
+            // Return card to original position
+            gsap.to(topCard, {
+                x: 0,
+                rotation: 0,
+                duration: 0.3,
+                ease: 'power2.out'
+            });
+        }
+    }
+
+    /**
+     * Remove the dismissed card from the DOM
+     */
+    removeDismissedCard(cardElement) {
+        if (cardElement && cardElement.parentNode) {
+            cardElement.parentNode.removeChild(cardElement);
+        }
+    }
+
+    /**
+     * Update card positions in the stack
+     * Cards stack from bottom to top: bottom card peeks out, top card is fully visible
+     * Array order: [0]=top card (largest), [N]=bottom card (smallest)
+     */
+    updateCardPositions() {
+        const cardCount = this.cards.length;
+
+        this.cards.forEach((card, index) => {
+            // Create a visible stack with larger offsets
+            // index 0 = top (highest), index N = bottom (lowest)
+            const stackOffset = index * 25 - (cardCount - 1) * 12.5; // Larger spacing
+            const scale = 1 - (index * 0.08); // More pronounced scaling
+            const zIndex = cardCount - index; // Proper z-index stacking
+
+            // Set z-index immediately for proper stacking
+            card.style.zIndex = zIndex;
+
+            gsap.to(card, {
+                y: stackOffset,
+                scale: Math.max(scale, 0.7),
+                duration: 0.3,
+                ease: 'power2.out'
+            });
         });
     }
 
@@ -97,8 +241,8 @@ export class Holocard {
     prepareContent(data) {
         if (!data) return;
 
-        // Kill any ongoing animations (prevent hide() callback from clearing state)
-        gsap.killTweensOf(this.panels);
+        // Kill any ongoing animations
+        gsap.killTweensOf(this.cards);
 
         // Reset navigation state when new content is ready (arrival at planet)
         if (this.isNavigating) {
@@ -107,168 +251,271 @@ export class Holocard {
             if (this.nextBtn) this.nextBtn.classList.remove('disabled');
         }
 
-        // Update content
+        // Update accent color
         this.wrapper.style.setProperty('--accent-color', data.accentColor);
-        this.leftPanel.innerHTML = createStatGrid(data);
-        this.centerPanel.innerHTML = createPanelHeader(data) + createPersonalNarrative(data);
-        this.rightPanel.innerHTML = createProfessionalContent(data.professional);
+
+        // Clear existing cards
+        this.stackContainer.innerHTML = '';
+        this.cards = [];
+
+        // Create multiple cards for this planet (up to 4)
+        const cardContents = this.createCardContents(data);
+
+        cardContents.forEach((content, index) => {
+            const card = this.createCard(content, index);
+            this.stackContainer.appendChild(card);
+            this.cards.push(card);
+        });
 
         this.currentPlanet = data.id;
-        this.visiblePanelCount = 0;
+        this.currentCardIndex = 0;
 
-        // Initialize 3D Preview in the left panel's circle
+        // Initialize 3D Preview in the first card's circle (if it has one)
         requestAnimationFrame(() => {
-            const circleContainer = this.leftPanel.querySelector('.holo-circle');
+            const circleContainer = this.cards[0]?.querySelector('.holo-circle');
             if (circleContainer) {
-                this.planetPreview.mount(circleContainer, data.id);
+                // Clear any existing content
+                circleContainer.innerHTML = '';
+
+                // Check if WebGL is available
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+
+                if (gl) {
+                    // WebGL available, try 3D preview
+                    try {
+                        this.planetPreview.mount(circleContainer, data.id);
+                    } catch (error) {
+                        console.warn('3D preview failed, using fallback:', error);
+                        this.createFallbackCircle(circleContainer, data);
+                    }
+                } else {
+                    // No WebGL, use fallback circle
+                    console.log('WebGL not available, using fallback circle');
+                    this.createFallbackCircle(circleContainer, data);
+                }
             }
         });
 
-        // Reset all panels to hidden
-        this.panels.forEach(panel => {
-            gsap.set(panel, { opacity: 0, y: 100 });
-        });
+        // Position cards in stack
+        this.updateCardPositions();
 
         // Hide the wrapper/backdrop for clean Card 0 view
         this.wrapper.classList.remove('visible');
         this.wrapper.classList.add('hidden');
         this.isVisible = false;
 
-        // Reset scroll position for new planet
-        if (this.contentContainer) {
-            this.contentContainer.scrollTop = 0;
+        console.log(`[${new Date().toISOString()}] 🎴 Prepared ${this.cards.length} cards for: ${data.id}`);
+    }
 
-            // Mobile Scroll Listener for State Sync
-            if (!this.scrollListenerAttached) {
-                this.contentContainer.addEventListener('scroll', () => {
-                    if (window.innerWidth > 1024) return; // Mobile only
+    /**
+     * Create card contents based on planet data
+     */
+    createCardContents(data) {
+        const contents = [];
 
-                    const height = this.contentContainer.clientHeight;
-                    const scroll = this.contentContainer.scrollTop;
-                    // Snap index: 0=Center, 1=Left, 2=Right
-                    const panelIndex = Math.round(scroll / height);
+        // Card 1: Stats & 3D Preview
+        contents.push({
+            type: 'stats',
+            content: createStatGrid(data),
+            title: data.title, // Use planet name as card title
+            className: 'card-stats'
+        });
 
-                    // Map panel index to Card Number (1-based for state)
-                    // Panels array: [center, left, right] -> Card 1, 2, 3
-                    // So card = panelIndex + 1
-                    const card = panelIndex + 1;
+        // Card 2: Personal Narrative
+        contents.push({
+            type: 'personal',
+            content: createPanelHeader(data) + createPersonalNarrative(data),
+            title: 'Personal',
+            className: 'card-personal'
+        });
 
-                    // Debounce/Throttling optional, but state machine handles dedup
-                    if (this.onUpdateState && this.isVisible) {
-                        this.onUpdateState(this.currentPlanet, card);
-                    }
-                });
-                this.scrollListenerAttached = true;
-            }
+        // Card 3: Professional Content
+        contents.push({
+            type: 'professional',
+            content: createProfessionalContent(data.professional),
+            title: 'Professional',
+            className: 'card-professional'
+        });
+
+        return contents;
+    }
+
+    /**
+     * Create insights content for the 4th card
+     */
+    createInsightsContent(data) {
+        let content = '<div class="insights-content">';
+
+        // Add projects if available
+        if (data.professional?.projects) {
+            content += '<h3>Key Projects</h3>';
+            data.professional.projects.forEach(project => {
+                content += `
+                    <div class="project-highlight">
+                        <strong>${project.name}</strong>
+                        <p>${project.desc}</p>
+                        <small>${project.stack}</small>
+                    </div>
+                `;
+            });
         }
 
-        console.log(`[${new Date().toISOString()}] 🎴 Prepared content for: ${data.id}`);
+        // Add podcasts if available
+        if (data.professional?.podcasts) {
+            content += '<h3>Recent Podcasts</h3>';
+            data.professional.podcasts.forEach(podcast => {
+                content += `
+                    <div class="podcast-highlight">
+                        <div class="pod-title">${podcast.title}</div>
+                        <div class="pod-context">${podcast.context}</div>
+                    </div>
+                `;
+            });
+        }
+
+        content += '</div>';
+        return content;
+    }
+
+    /**
+     * Create a fallback circle when 3D preview is not available
+     */
+    createFallbackCircle(container, data) {
+        const circle = document.createElement('div');
+        circle.className = 'fallback-circle';
+        circle.innerHTML = `
+            <div class="fallback-circle-content">
+                <div class="fallback-circle-symbol">${data.title.charAt(0)}</div>
+                <div class="fallback-circle-label">${data.title}</div>
+            </div>
+        `;
+        circle.style.setProperty('--accent-color', data.accentColor);
+        container.appendChild(circle);
+    }
+
+    /**
+     * Create a single card element
+     */
+    createCard(cardData, index) {
+        const card = document.createElement('div');
+        card.className = `holo-card ${cardData.className}`;
+        card.dataset.cardIndex = index;
+
+        card.innerHTML = `
+            <div class="card-header">
+                <h2>${cardData.title}</h2>
+            </div>
+            <div class="card-content">
+                ${cardData.content}
+            </div>
+        `;
+
+        return card;
     }
 
     setUpdateStateCallback(callback) {
         this.onUpdateState = callback;
     }
 
+    setCardAdvanceCallback(callback) {
+        this.onCardAdvance = callback;
+    }
+
     /**
-     * Show the next panel with fly-in animation
-     * Returns true if a panel was shown, false if all panels are already visible
+     * Show the card stack with fly-in animation
+     * Returns true if cards were shown, false if no cards available
      */
     showNextPanel() {
-        if (this.visiblePanelCount >= 3) return false;
+        if (this.cards.length === 0) return false;
 
-        // Make wrapper visible on first panel
-        if (this.visiblePanelCount === 0) {
+        // Make wrapper visible
+        this.wrapper.classList.remove('hidden');
+        this.wrapper.classList.add('visible');
+        this.isVisible = true;
+
+        // Animate cards in with staggered opacity effect
+        // Positions are already set by updateCardPositions()
+        this.cards.forEach((card, index) => {
+            gsap.fromTo(card,
+                { opacity: 0 },
+                {
+                    opacity: 1,
+                    duration: 0.8,
+                    delay: index * 0.15, // Slightly longer stagger for stack effect
+                    ease: 'power3.out'
+                }
+            );
+        });
+
+        return true;
+    }
+
+    /**
+     * Show only the specific card at the given index
+     */
+    showSpecificCard(cardIndex) {
+        // Make wrapper visible if not already
+        if (!this.isVisible) {
             this.wrapper.classList.remove('hidden');
             this.wrapper.classList.add('visible');
             this.isVisible = true;
         }
 
-        const panel = this.panels[this.visiblePanelCount];
-
-        // If panel is already visible (e.g. mobile scroll revealed it), just update count and skip anim
-        if (panel.style.opacity === '1' || window.getComputedStyle(panel).opacity === '1') {
-            this.visiblePanelCount++;
-            return true;
-        }
-
-        // Directions match new panel order: center, left, right
-        const directions = [
-            { x: 0, y: 100 },   // Center panel from bottom
-            { x: -100, y: 0 },  // Left panel from left
-            { x: 100, y: 0 }    // Right panel from right
-        ];
-        const dir = directions[this.visiblePanelCount];
-
-        // Animate panel in with slower 1.5s duration for visible fly-in effect
-        gsap.fromTo(panel,
-            { opacity: 0, x: dir.x, y: dir.y },
-            {
-                opacity: 1,
-                x: 0,
-                y: 0,
-                duration: 1.5,
-                ease: 'power3.out'
+        // Show only the specified card, hide all others
+        this.cards.forEach((card, index) => {
+            if (index === cardIndex) {
+                // Show this card
+                gsap.to(card, {
+                    opacity: 1,
+                    duration: 0.3,
+                    ease: 'power2.out'
+                });
+            } else {
+                // Hide other cards
+                gsap.to(card, {
+                    opacity: 0,
+                    duration: 0.3,
+                    ease: 'power2.out'
+                });
             }
-        );
-
-        // On mobile, animate container scroll CONCURRENTLY with the panel fly-in
-        // This ensures the previous panel scrolls up AS the new one flies in
-        if (window.innerWidth <= 1024 && this.contentContainer) {
-            gsap.to(this.contentContainer, {
-                scrollTop: panel.offsetTop,
-                duration: 1.5,
-                ease: 'power3.out'
-            });
-        }
-
-        this.visiblePanelCount++;
-
-        return true;
+        });
     }
 
     /**
-     * Hide the last visible panel (for scrolling back)
+     * Hide the last visible card (for scrolling back)
+     * In stack system, this removes the top card
      */
     hideLastPanel() {
-        if (this.visiblePanelCount <= 0) return false;
+        if (this.cards.length <= 0) return false;
 
-        this.visiblePanelCount--;
-        const panel = this.panels[this.visiblePanelCount];
-        // Directions match new panel order: center, left, right
-        const directions = [
-            { x: 0, y: 100 },   // Center panel to bottom
-            { x: -100, y: 0 },  // Left panel to left
-            { x: 100, y: 0 }    // Right panel to right
-        ];
-        const dir = directions[this.visiblePanelCount];
+        const topCard = this.cards[0];
+        if (!topCard) return false;
 
-        gsap.to(panel, {
+        gsap.to(topCard, {
             opacity: 0,
-            x: dir.x,
-            y: dir.y,
-            duration: 1.0,
-            ease: 'power2.in'
+            y: -50,
+            scale: 0.8,
+            duration: 0.5,
+            ease: 'power2.in',
+            onComplete: () => {
+                this.removeTopCard();
+            }
         });
-
-        // Hide wrapper if all panels hidden
-        if (this.visiblePanelCount === 0) {
-            this.wrapper.classList.remove('visible');
-            this.wrapper.classList.add('hidden');
-            this.isVisible = false;
-        }
 
         return true;
     }
 
     /**
-     * Fully hide all panels and reset
+     * Fully hide all cards and reset
      */
     hide() {
-        if (!this.isVisible && this.visiblePanelCount === 0) return;
+        if (!this.isVisible && this.cards.length === 0) return;
 
-        gsap.to(this.panels, {
+        gsap.to(this.cards, {
             opacity: 0,
             y: 50,
+            scale: 0.9,
             duration: 0.3,
             stagger: 0.05,
             ease: 'power2.in',
@@ -276,8 +523,9 @@ export class Holocard {
                 this.wrapper.classList.remove('visible');
                 this.wrapper.classList.add('hidden');
                 this.isVisible = false;
-                this.visiblePanelCount = 0;
+                this.cards = [];
                 this.currentPlanet = null;
+                this.currentCardIndex = 0;
 
                 // Stop the 3D preview to save resources
                 if (this.planetPreview) {
@@ -290,9 +538,7 @@ export class Holocard {
     // Legacy show method for backward compatibility
     show(data) {
         this.prepareContent(data);
-        // Show all panels at once (legacy behavior)
-        this.showNextPanel();
-        this.showNextPanel();
+        // Show all cards at once (legacy behavior)
         this.showNextPanel();
     }
 }
