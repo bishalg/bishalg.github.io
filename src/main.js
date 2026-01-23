@@ -25,28 +25,9 @@ class App {
 
     init() {
         // Simple loading simulation - start immediately since textures load asynchronously
-        console.log('🚀 Initializing Cosmic CV...');
-
-        // Immediate visual test - change the loader text immediately
         const loaderText = document.querySelector('.loader-text');
-        if (loaderText) {
-            loaderText.textContent = 'INITIALIZING COSMIC TIMELINE... LOADING...';
-            loaderText.style.color = '#ffaa00'; // Change color to confirm JS is working
-            console.log('✨ Successfully updated loader text!');
-        } else {
-            console.error('❌ Could not find .loader-text element!');
-            // Create a fallback visual indicator
-            const testDiv = document.createElement('div');
-            testDiv.textContent = 'JAVASCRIPT IS RUNNING!';
-            testDiv.style.position = 'fixed';
-            testDiv.style.top = '10px';
-            testDiv.style.left = '10px';
-            testDiv.style.background = 'red';
-            testDiv.style.color = 'white';
-            testDiv.style.padding = '10px';
-            testDiv.style.zIndex = '9999';
-            document.body.appendChild(testDiv);
-            return;
+        if (!loaderText) {
+            return; // Silent fail in production
         }
 
         // Show loading progress animation
@@ -54,28 +35,21 @@ class App {
         const loaderBar = document.querySelector('.loader-bar');
         const loader = document.getElementById('loader');
 
-        console.log('🔍 Found loader elements, starting progress...');
-
         const progressInterval = setInterval(() => {
             progress += Math.random() * 15; // Random progress increments
             if (progress > 100) progress = 100;
 
-            console.log(`📈 Progress: ${Math.floor(progress)}%`);
-
             if (loaderText) {
                 loaderText.textContent = `INITIALIZING COSMIC TIMELINE... ${Math.floor(progress)}%`;
-                console.log(`✏️ Updated text to: ${loaderText.textContent}`);
             }
 
             if (loaderBar) {
                 loaderBar.style.setProperty('--progress', `${progress}%`);
                 loaderBar.classList.add('loader-bar--progress');
-                console.log(`📊 Updated progress bar to: ${progress}%`);
             }
 
             if (progress >= 100) {
                 clearInterval(progressInterval);
-                console.log('✅ Cosmic initialization complete!');
 
                 // Hide loader and start
                 if (loader) {
@@ -121,10 +95,6 @@ class App {
         // Setup URL state sync (deep linking)
         this.setupUrlStateSync();
 
-        // Run unit test for central state array
-        setTimeout(() => {
-            this.scrollAnimator.stateMachine.runUnitTest();
-        }, 1000);
 
         // Ensure we start within reasonable time even if progress simulation fails
         setTimeout(() => {
@@ -150,14 +120,9 @@ class App {
      * Setup URL state sync - read params on load, update on scroll
      */
     setupUrlStateSync() {
-        const url = window.location.search;
-        console.log(`[URL] Initial URL: "${url}"`);
-
-        const params = new URLSearchParams(url);
+        const params = new URLSearchParams(window.location.search);
         const planet = params.get('planet');
         const cardParam = params.get('card');
-
-        console.log(`[URL] Parsed params: planet="${planet}", card="${cardParam}"`);
 
         // Only restore state if URL actually has parameters
         if (planet && cardParam !== null && App.VALID_PLANETS.includes(planet)) {
@@ -166,20 +131,16 @@ class App {
             if (isNaN(card) || card < 0) card = 0;
             if (card > App.MAX_CARDS) card = App.MAX_CARDS;
 
-            console.log(`[URL] Restoring state: planet=${planet}, card=${card}`);
-
             // Wait for smooth scroll to be ready, then scroll
             setTimeout(() => {
                 this.scrollToPlanetCard(planet, card);
             }, 500); // Delay to allow GSAP triggers to initialize
-        } else {
-            // No URL parameters - start clean, don't navigate to any state
-            console.log('[URL] Starting clean - no URL parameters, staying on hero screen');
         }
 
         // Set callback for scroll animator to update URL
-        this.scrollAnimator.setUrlUpdateCallback((planetId, cardCount) => {
-            this.updateUrlState(planetId, cardCount);
+        // Now passes NavigationState objects following SOLID principles
+        this.scrollAnimator.setUrlUpdateCallback((state) => {
+            this.updateUrlState(state);
         });
     }
 
@@ -187,15 +148,30 @@ class App {
      * Scroll to a specific planet and card state
      */
     scrollToPlanetCard(planet, card) {
-        console.log(`🎯 scrollToPlanetCard called: ${planet}, card ${card}`);
         // Delegate to state machine for consistent navigation
         this.scrollAnimator.goToPlanetCard(planet, card);
     }
 
     /**
      * Update URL with current state (no page reload)
+     * Now works with NavigationState objects following SOLID principles
      */
-    updateUrlState(planet, card) {
+    updateUrlState(state) {
+        // Handle different input types (backward compatibility)
+        let planet, card;
+        if (state && typeof state === 'object' && state.planet) {
+            // New NavigationState object
+            planet = state.planet;
+            card = state.card;
+        } else if (typeof state === 'string') {
+            // Legacy string format (planet name)
+            planet = state;
+            card = arguments[1] || 0;
+        } else {
+            // Invalid state
+            return;
+        }
+
         // If at initial state (earth, card 0), clear URL to clean state
         if (planet === 'earth' && card === 0) {
             window.history.replaceState({}, '', window.location.pathname);
@@ -241,7 +217,6 @@ class App {
     setupHolocardNavigation() {
         // Navigation via state machine (Next Button)
         this.holocard.setNavigationCallback(() => {
-            console.log('🎯 NEXT button clicked - calling goToNextState');
             this.scrollAnimator.goToNextState();
         });
 
@@ -271,7 +246,6 @@ class App {
         this.cosmicScene.setPlanetClickCallback((planetName) => {
             const targetSection = document.querySelector(`.scene--${planetName}`);
             if (targetSection) {
-                console.log(`🪐 Planet clicked: ${planetName}, scrolling to section`);
                 this.smoothScroll.lenis.scrollTo(targetSection, { duration: 1.5 });
             }
         });
@@ -308,9 +282,7 @@ class App {
     setupTimeTravelButton() {
         const timeTravelBtn = document.getElementById('time-travel-btn');
         if (timeTravelBtn) {
-            console.log('🎯 Time Travel button found and set up');
             timeTravelBtn.addEventListener('click', () => {
-                console.log('🚀 Time Travel button clicked!');
                 // Show the Next button (it's hidden on the hero screen)
                 if (this.holocard.nextBtn) {
                     this.holocard.nextBtn.classList.add('visible');
@@ -318,12 +290,9 @@ class App {
 
                 // Use ScrollAnimator to go to Earth Card 0
                 if (this.scrollAnimator) {
-                    console.log('🌍 Navigating to Earth planet view');
                     this.scrollAnimator.goToPlanetCard('earth', 0);
                 }
             });
-        } else {
-            console.warn('⚠️ Time Travel button not found!');
         }
     }
 
@@ -351,38 +320,21 @@ class SmoothScroll {
     }
 }
 
-// Immediate test
-console.log('🚀 Cosmic CV script loaded and executing!');
-
 // Initializer
 if (document.readyState === 'loading') {
-    console.log('📄 DOM still loading, waiting for DOMContentLoaded...');
     document.addEventListener('DOMContentLoaded', () => {
-        console.log('📄 DOMContentLoaded fired, starting app...');
         startApp();
     });
 } else {
-    console.log('📄 DOM already ready, starting app immediately...');
     startApp();
 }
 
 function startApp() {
-    console.log('🎯 Starting cosmic app initialization...');
     if (window.WebGLRenderingContext) {
-        console.log('🎮 WebGL available, creating app...');
-        try {
-            window.cosmicApp = new App();
-            console.log('✅ App created successfully!');
-        } catch (error) {
-            console.error('❌ Error creating app:', error);
-        }
-    } else {
-        console.warn('⚠️ WebGL not available - this app requires WebGL');
-        // Still try to start for debugging
         try {
             window.cosmicApp = new App();
         } catch (error) {
-            console.error('❌ Error creating app even without WebGL:', error);
+            // Silent fail in production
         }
     }
 }

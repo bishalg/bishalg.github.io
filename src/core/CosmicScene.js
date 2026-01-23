@@ -182,10 +182,8 @@ export class CosmicScene {
         // Check if WebGL is available and working
         const canvas = document.createElement('canvas');
         const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-        console.log('WebGL context available:', !!gl);
 
         if (!gl) {
-            console.warn('WebGL not available, using fallback mode');
             this.useFallback = true;
             this.createFallbackPlanets();
             return;
@@ -211,7 +209,6 @@ export class CosmicScene {
             this.renderer.render(this.scene, this.camera);
 
         } catch (error) {
-            console.warn('WebGL renderer failed, using fallback mode:', error);
             this.useFallback = true;
             this.createFallbackPlanets();
         }
@@ -302,8 +299,6 @@ export class CosmicScene {
         `;
         document.body.appendChild(indicator);
 
-        console.log('✅ Created fallback planets for low-performance environment');
-        console.log('Fallback planets:', Object.keys(this.fallbackPlanets));
     }
 
     createStars() {
@@ -426,7 +421,6 @@ export class CosmicScene {
             this.textureLoader.load(
                 texture,
                 (loadedTex) => {
-                    console.log(`✅ Texture loaded: ${texture}`);
                     // Ensure texture encoding is correct for StandardMaterial (r160+)
                     loadedTex.colorSpace = THREE.SRGBColorSpace;
                     material.map = loadedTex;
@@ -434,7 +428,7 @@ export class CosmicScene {
                 },
                 undefined,
                 (err) => {
-                    console.warn(`⚠️ Texture failed: ${texture}`, err);
+                    // Texture failed to load - material will use default color
                 }
             );
         }
@@ -457,7 +451,6 @@ export class CosmicScene {
             this.createOrbitLine(config.distance, color);
         }
 
-        console.log(`🪐 Created planet: ${config.name} at distance ${config.distance}`);
 
         return { mesh, group: orbitGroup };
     }
@@ -584,10 +577,10 @@ export class CosmicScene {
                 ringMat.map = tex;
                 ringMat.needsUpdate = true;
             },
-            undefined,
-            (err) => {
-                console.warn(`⚠️ Saturn texture failed`, err);
-            }
+                undefined,
+                (err) => {
+                    // Saturn texture failed to load
+                }
         );
 
         // Load ring alpha texture
@@ -601,7 +594,7 @@ export class CosmicScene {
                 },
                 undefined,
                 (err) => {
-                    console.warn(`⚠️ Saturn ring texture failed`, err);
+                    // Saturn ring texture failed to load
                 }
             );
         }

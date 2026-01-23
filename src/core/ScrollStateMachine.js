@@ -8,160 +8,336 @@
  * - card: 0 = planet focus, 1-n = card stack (variable per planet)
  */
 
+/**
+ * NavigationState - Immutable state representation
+ * Single Responsibility: Data container with validation
+ */
+class NavigationState {
+    constructor(planet, card, globalIndex = -1) {
+        if (!planet || typeof planet !== 'string') {
+            throw new Error('Planet must be a non-empty string');
+        }
+        if (!Number.isInteger(card) || card < 0) {
+            throw new Error('Card must be a non-negative integer');
+        }
+
+        this.planet = planet;
+        this.card = card;      // 0 = planet view, 1-N = cards
+        this.globalIndex = globalIndex; // Global position in navigation graph
+        this.index = globalIndex; // Alias for backward compatibility
+        Object.freeze(this);   // Immutable
+    }
+
+    equals(other) {
+        return other instanceof NavigationState &&
+               this.planet === other.planet &&
+               this.card === other.card;
+    }
+
+    toString() {
+        return `${this.planet}${this.card}`;
+    }
+
+    isPlanetView() {
+        return this.card === 0;
+    }
+
+    isCardView() {
+        return this.card > 0;
+    }
+}
+
+/**
+ * DoublyLinkedListNode - Node for doubly linked list
+ * Enables O(1) navigation in both directions
+ */
+class DoublyLinkedListNode {
+    constructor(data) {
+        this.data = data;
+        this.prev = null;
+        this.next = null;
+    }
+}
+
+/**
+ * DoublyLinkedList - Efficient navigation structure
+ * Single Responsibility: Bidirectional linked list operations
+ * Time Complexity: O(1) for next/prev, O(n) for find operations
+ */
+class DoublyLinkedList {
+    constructor() {
+        this.head = null;
+        this.tail = null;
+        this.current = null;
+        this.size = 0;
+    }
+
+    append(data) {
+        const newNode = new DoublyLinkedListNode(data);
+
+        if (!this.head) {
+            this.head = this.tail = this.current = newNode;
+        } else {
+            newNode.prev = this.tail;
+            this.tail.next = newNode;
+            this.tail = newNode;
+        }
+
+        this.size++;
+        return this;
+    }
+
+    getCurrent() {
+        return this.current ? this.current.data : null;
+    }
+
+    next() {
+        if (!this.current || !this.current.next) return null;
+        this.current = this.current.next;
+        this.currentIndex++;
+        return this.getCurrent();
+    }
+
+    prev() {
+        if (!this.current || !this.current.prev) return null;
+        this.current = this.current.prev;
+        this.currentIndex--;
+        return this.getCurrent();
+    }
+
+    goTo(predicate) {
+        let node = this.head;
+        let index = 0;
+
+        while (node) {
+            if (predicate(node.data, index)) {
+                this.current = node;
+                return node.data;
+            }
+            node = node.next;
+            index++;
+        }
+
+        return null; // Not found
+    }
+
+    findIndex(predicate) {
+        let node = this.head;
+        let index = 0;
+
+        while (node) {
+            if (predicate(node.data, index)) {
+                return index;
+            }
+            node = node.next;
+            index++;
+        }
+
+        return -1;
+    }
+
+    getAt(index) {
+        if (index < 0 || index >= this.size) return null;
+
+        let node = this.head;
+        for (let i = 0; i < index; i++) {
+            node = node.next;
+        }
+
+        return node.data;
+    }
+
+    get length() {
+        return this.size;
+    }
+}
+
+/**
+ * PlanetConfiguration - Immutable configuration repository
+ * Single Responsibility: Planet metadata with validation
+ * Open/Closed: New planets can be added without modifying existing code
+ */
+class PlanetConfiguration {
+    constructor() {
+        // Immutable planet definitions
+        this._planets = Object.freeze([
+            'earth', 'sun', 'moon', 'mars', 'mercury',
+            'jupiter', 'venus', 'saturn', 'neptune'
+        ]);
+
+        // Card counts per planet - extensible configuration
+        this._cardCounts = Object.freeze({
+            earth: 3, sun: 3, moon: 3, mars: 3, mercury: 3,
+            jupiter: 3, venus: 3, saturn: 3, neptune: 3
+        });
+    }
+
+    getPlanets() {
+        return [...this._planets]; // Return copy to prevent external mutation
+    }
+
+    getCardCount(planet) {
+        if (!this.isValidPlanet(planet)) {
+            throw new Error(`Invalid planet: ${planet}`);
+        }
+        return this._cardCounts[planet];
+    }
+
+    isValidPlanet(planet) {
+        return this._planets.includes(planet);
+    }
+
+    getPlanetIndex(planet) {
+        return this._planets.indexOf(planet);
+    }
+}
+
+/**
+ * ScrollStateMachine - Main state machine following SOLID principles
+ * - Single Responsibility: State management and navigation logic
+ * - Open/Closed: Extensible through composition and interfaces
+ * - Liskov Substitution: Uses abstract data structures
+ * - Interface Segregation: Clean, focused interface
+ * - Dependency Inversion: Depends on abstractions, not concretions
+ */
 export class ScrollStateMachine {
     constructor() {
-        // Define planet order
-        this.planets = ['earth', 'sun', 'moon', 'mars', 'mercury', 'jupiter', 'venus', 'saturn', 'neptune'];
+        this.planetConfig = new PlanetConfiguration();
+        this.navigationGraph = new DoublyLinkedList();
 
-        // Standardized to 3 cards per planet
-        this.cardsPerPlanet = {
-            earth: 3,      // Stats, Personal, Professional
-            sun: 3,        // Stats, Personal, Professional
-            moon: 3,       // Stats, Personal, Professional
-            mars: 3,       // Stats, Personal, Professional
-            mercury: 3,    // Stats, Personal, Professional
-            jupiter: 3,    // Stats, Personal, Professional
-            venus: 3,      // Stats, Personal, Professional
-            saturn: 3,     // Stats, Personal, Professional
-            neptune: 3     // Stats, Personal, Professional
-        };
+        this.buildNavigationGraph();
+        this.onStateChange = null;
+    }
 
-        // Build the CENTRAL STATE ARRAY: [0,1,2,3,0,1,2,3,0,1,2,3,...]
-        this.states = [];
-        for (let i = 0; i < this.planets.length; i++) {
-            const planet = this.planets[i];
-            // Each planet: planet view (0) + N cards (1,2,3)
-            this.states.push({ planet, card: 0 }); // Planet view
-            for (let c = 1; c <= this.cardsPerPlanet[planet]; c++) {
-                this.states.push({ planet, card: c }); // Card states
+    /**
+     * Build the navigation graph using doubly linked list
+     * Each planet contributes: 1 planet view + N card states
+     * Creates a linear sequence that can be navigated bidirectionally
+     */
+    buildNavigationGraph() {
+        const planets = this.planetConfig.getPlanets();
+        let globalIndex = 0;
+
+        for (const planet of planets) {
+            // Planet view state (card = 0)
+            this.navigationGraph.append(new NavigationState(planet, 0, globalIndex++));
+
+            // Card states (card = 1 to N)
+            const cardCount = this.planetConfig.getCardCount(planet);
+            for (let card = 1; card <= cardCount; card++) {
+                this.navigationGraph.append(new NavigationState(planet, card, globalIndex++));
             }
         }
-
-        this.totalStates = this.states.length;
-        this.currentIndex = 0;
-
-        // Callbacks for state changes
-        this.onStateChange = null;
-
-        console.log('🎯 Central State Array:', this.states.map((s, i) => `${i}:${s.planet}${s.card}`).join(', '));
     }
 
     /**
-     * Get total number of states
+     * Get total number of states in navigation graph
      */
     getTotal() {
-        return this.totalStates;
+        return this.navigationGraph.length;
     }
 
     /**
-     * Get current state
+     * Get current navigation state
      */
     getState() {
-        return this.states[this.currentIndex];
+        return this.navigationGraph.getCurrent();
     }
 
     /**
-     * Get state by index (with bounds clamping)
+     * Get state by global index
      */
     getStateAt(index) {
-        const clampedIndex = Math.max(0, Math.min(index, this.totalStates - 1));
-        return this.states[clampedIndex];
+        return this.navigationGraph.getAt(index);
     }
 
     /**
-     * Move to next state in the central array
-     * Simple array index increment - no special logic needed
+     * Navigate to next state in linked list
+     * O(1) operation due to doubly linked structure
      */
     next() {
-        if (this.currentIndex >= this.totalStates - 1) {
-            console.log('🏁 At end of central state array');
-            return null; // Already at end
-        }
-
-        const prevState = this.getState();
-        this.currentIndex++;
-        const newState = this.getState();
-
-        console.log(`➡️ NEXT: ${prevState.planet}${prevState.card} → ${newState.planet}${newState.card} (index: ${this.currentIndex - 1} → ${this.currentIndex})`);
-
-        this._notifyChange();
-        return newState;
-    }
-
-    /**
-     * Move to previous state in the central array
-     * Simple array index decrement
-     */
-    prev() {
-        if (this.currentIndex <= 0) {
-            console.log('🏁 At start of central state array');
-            return null; // Already at start
-        }
-
-        const prevState = this.getState();
-        this.currentIndex--;
-        const newState = this.getState();
-
-        console.log(`⬅️ PREV: ${prevState.planet}${prevState.card} → ${newState.planet}${newState.card} (index: ${this.currentIndex + 1} → ${this.currentIndex})`);
-
-        this._notifyChange();
-        return newState;
-    }
-
-    /**
-     * Jump to specific state index
-     * Clamps to valid range
-     */
-    goTo(index) {
-        const clampedIndex = Math.max(0, Math.min(index, this.totalStates - 1));
-        if (clampedIndex !== this.currentIndex) {
-            this.currentIndex = clampedIndex;
+        const newState = this.navigationGraph.next();
+        if (newState) {
             this._notifyChange();
         }
-        return this.getState();
+        return newState;
     }
 
     /**
-     * Jump to specific planet and card
-     * card: 0 = planet view, 1 = first card, 2 = second card, etc.
+     * Navigate to previous state in linked list
+     * O(1) operation due to doubly linked structure
      */
-    goToPlanetCard(planet, card) {
-        const planetIndex = this.planets.indexOf(planet);
-        if (planetIndex === -1) return null;
-
-        const maxCards = this.cardsPerPlanet[planet] || 3;
-        const clampedCard = Math.max(0, Math.min(card, maxCards)); // Allow 0 to maxCards
-
-        return this.goTo(this.getIndexFor(planet, clampedCard));
+    prev() {
+        const newState = this.navigationGraph.prev();
+        if (newState) {
+            this._notifyChange();
+        }
+        return newState;
     }
 
     /**
-     * Get state index for a planet/card combo
-     * card: 0 = planet view, 1 = first card, 2 = second card, etc.
+     * Jump to specific state by global index
+     * Clamps to valid bounds instead of returning null
+     */
+    goTo(index) {
+        const clampedIndex = Math.max(0, Math.min(index, this.getTotal() - 1));
+        const currentState = this.getState();
+        const newState = this.navigationGraph.goTo((state, idx) => idx === clampedIndex);
+
+        if (newState && !currentState.equals(newState)) {
+            this._notifyChange();
+        }
+
+        return newState;
+    }
+
+    /**
+     * Get the global index for a specific planet and card
+     * Useful for direct index calculations
      */
     getIndexFor(planet, card) {
-        const planetIndex = this.planets.indexOf(planet);
-        if (planetIndex === -1) return -1;
-
-        const maxCards = this.cardsPerPlanet[planet] || 3;
-        const clampedCard = Math.max(0, Math.min(card, maxCards)); // Allow 0 to maxCards
-
-        // Each planet contributes (maxCards + 1) states: 1 planet view + maxCards card states
-        let stateIndex = 0;
-        for (let i = 0; i < planetIndex; i++) {
-            const prevMaxCards = this.cardsPerPlanet[this.planets[i]] || 3;
-            stateIndex += prevMaxCards + 1; // 1 planet view + N cards per previous planet
+        if (!this.planetConfig.isValidPlanet(planet)) {
+            return -1;
         }
-        stateIndex += clampedCard; // Add the card index for this planet
 
-        return stateIndex;
+        const maxCards = this.planetConfig.getCardCount(planet);
+        const clampedCard = Math.max(0, Math.min(card, maxCards));
+
+        // Calculate index: (planet index * states per planet) + card index
+        const planetIndex = this.planetConfig.getPlanetIndex(planet);
+        return (planetIndex * (maxCards + 1)) + clampedCard;
+    }
+
+    /**
+     * Jump to specific planet and card state
+     * Demonstrates proper data structure usage with predicate functions
+     */
+    goToPlanetCard(planet, card) {
+        if (!this.planetConfig.isValidPlanet(planet)) {
+            return null;
+        }
+
+        const maxCards = this.planetConfig.getCardCount(planet);
+        const clampedCard = Math.max(0, Math.min(card, maxCards));
+
+        // Use linked list's goTo with predicate function
+        const newState = this.navigationGraph.goTo(state =>
+            state.planet === planet && state.card === clampedCard
+        );
+
+        if (newState) {
+            this._notifyChange();
+        }
+
+        return newState;
     }
 
     /**
      * Get the number of cards for a specific planet
+     * Demonstrates proper abstraction through PlanetConfiguration
      */
     getCardsForPlanet(planet) {
-        return this.cardsPerPlanet[planet] || 3;
+        return this.planetConfig.getCardCount(planet);
     }
 
     /**
@@ -182,46 +358,10 @@ export class ScrollStateMachine {
 
     /**
      * Reset to initial state
+     * Clean state restoration
      */
     reset() {
-        if (this.currentIndex !== 0) {
-            this.currentIndex = 0;
-            this._notifyChange();
-        }
-    }
-
-    /**
-     * Unit test for central state array navigation
-     * Tests NEXT/PREV operations through the entire array
-     */
-    runUnitTest() {
-        console.log('🧪 Running Central State Array Unit Test...');
-
-        // Reset to start
-        this.currentIndex = 0;
-        console.log('📍 Starting at:', this.getState());
-
-        // Test NEXT through all states
-        let steps = 0;
-        while (this.next() !== null && steps < 50) { // Safety limit
-            steps++;
-        }
-        console.log(`✅ NEXT test: ${steps} steps to end`);
-
-        // Test PREV back to start
-        steps = 0;
-        while (this.prev() !== null && steps < 50) {
-            steps++;
-        }
-        console.log(`✅ PREV test: ${steps} steps back to start`);
-
-        // Test array bounds
-        this.currentIndex = -1;
-        console.log('❌ Underflow test:', this.getState()); // Should clamp to 0
-
-        this.currentIndex = this.totalStates;
-        console.log('❌ Overflow test:', this.getStateAt(this.totalStates)); // Should clamp to last
-
-        console.log('🎯 Unit test complete! Central array working correctly.');
+        this.navigationGraph.goTo((state, index) => index === 0);
+        this._notifyChange();
     }
 }

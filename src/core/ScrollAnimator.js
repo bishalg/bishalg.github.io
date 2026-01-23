@@ -14,6 +14,194 @@ const ScrollTrigger = window.ScrollTrigger;
  * - This class handles GSAP/DOM visualization
  * - "Next" button calls stateMachine.next(), then scrolls to that state
  */
+/**
+ * NavigationCoordinator - Central state management for all navigation interactions
+ * Single source of truth for app navigation state
+ */
+class NavigationCoordinator {
+    constructor(stateMachine) {
+        this.stateMachine = stateMachine;
+        this.currentState = stateMachine.getState();
+        this.isNavigating = false;
+        this.pendingScroll = null;
+        this.scrollTimeout = null;
+    }
+
+    /**
+     * Get current navigation state
+     */
+    getCurrentState() {
+        return this.currentState;
+    }
+
+    /**
+     * Navigate to next state (button-triggered)
+     */
+    async navigateNext() {
+        if (this.isNavigating) {
+            console.log('Navigation in progress, ignoring next request');
+            return null;
+        }
+
+        this.isNavigating = true;
+        const newState = this.stateMachine.next();
+
+        if (newState) {
+            await this.performNavigation(newState, 'button-next');
+        }
+
+        this.isNavigating = false;
+        return newState;
+    }
+
+    /**
+     * Navigate to previous state (button-triggered)
+     */
+    async navigatePrev() {
+        if (this.isNavigating) {
+            console.log('Navigation in progress, ignoring prev request');
+            return null;
+        }
+
+        this.isNavigating = true;
+        const newState = this.stateMachine.prev();
+
+        if (newState) {
+            await this.performNavigation(newState, 'button-prev');
+        }
+
+        this.isNavigating = false;
+        return newState;
+    }
+
+    /**
+     * Handle scroll-triggered navigation
+     */
+    handleScrollNavigation(scrollState) {
+        if (this.isNavigating) {
+            // Queue the scroll request for later
+            this.pendingScroll = scrollState;
+            return;
+        }
+
+        if (!this.currentState.equals(scrollState)) {
+            this.updateState(scrollState, 'scroll');
+        }
+    }
+
+    /**
+     * Jump to specific state
+     */
+    async goToState(state) {
+        if (this.isNavigating) {
+            console.log('Navigation in progress, ignoring goto request');
+            return null;
+        }
+
+        this.isNavigating = true;
+        const newState = this.stateMachine.goToPlanetCard(state.planet, state.card);
+
+        if (newState) {
+            await this.performNavigation(newState, 'direct');
+        }
+
+        this.isNavigating = false;
+        return newState;
+    }
+
+    /**
+     * Perform the actual navigation with proper sequencing
+     */
+    async performNavigation(newState, source) {
+        console.log(`🎯 Navigation from ${source}: ${this.currentState.toString()} → ${newState.toString()}`);
+
+        // Update internal state first
+        this.currentState = newState;
+
+        // Notify listeners (UI updates, URL changes)
+        if (this.onStateChange) {
+            this.onStateChange(newState);
+        }
+
+        // Perform visual navigation (scroll to position)
+        await this.scrollToState(newState);
+    }
+
+    /**
+     * Update state without full navigation (for scroll sync)
+     */
+    updateState(newState, source) {
+        if (this.currentState.equals(newState)) {
+            return; // No change needed
+        }
+
+        console.log(`📜 State sync from ${source}: ${this.currentState.toString()} → ${newState.toString()}`);
+        this.currentState = newState;
+
+        // Notify listeners but don't scroll (already at position)
+        if (this.onStateChange) {
+            this.onStateChange(newState);
+        }
+    }
+
+    /**
+     * Scroll to show the given state
+     */
+    async scrollToState(state) {
+        return new Promise((resolve) => {
+            // Calculate target scroll position based on state
+            const planetIndex = this.stateMachine.planetConfig.getPlanetIndex(state.planet);
+            const cardsForPlanet = this.stateMachine.getCardsForPlanet(state.planet);
+            const statesPerPlanet = cardsForPlanet + 1;
+
+            // Each planet section is statesPerPlanet viewport heights
+            const planetScrollOffset = planetIndex * statesPerPlanet;
+            const stateOffset = state.card;
+            const targetScrollProgress = (planetScrollOffset + stateOffset) / (this.stateMachine.getTotal() - 1);
+
+            // Convert to pixel position (approximate)
+            const viewportHeight = window.innerHeight;
+            const totalScrollHeight = (this.stateMachine.getTotal() - 1) * viewportHeight;
+            const targetScrollY = targetScrollProgress * totalScrollHeight;
+
+            // Perform smooth scroll
+            if (window.cosmicApp?.smoothScroll?.lenis) {
+                window.cosmicApp.smoothScroll.lenis.scrollTo(targetScrollY, {
+                    duration: 1.0,
+                    easing: (t) => t,
+                    onComplete: () => {
+                        setTimeout(resolve, 100); // Small delay for stability
+                    }
+                });
+
+                // Fallback timeout
+                setTimeout(resolve, 1500);
+            } else {
+                window.scrollTo({ top: targetScrollY, behavior: 'smooth' });
+                setTimeout(resolve, 1000);
+            }
+        });
+    }
+
+    /**
+     * Process any pending scroll requests
+     */
+    processPendingScroll() {
+        if (this.pendingScroll && !this.isNavigating) {
+            const scrollState = this.pendingScroll;
+            this.pendingScroll = null;
+            this.handleScrollNavigation(scrollState);
+        }
+    }
+
+    /**
+     * Set state change callback
+     */
+    setOnStateChange(callback) {
+        this.onStateChange = callback;
+    }
+}
+
 export class ScrollAnimator {
     constructor(cosmicScene, holocard, solarSystemData) {
         this.cosmicScene = cosmicScene;
@@ -22,10 +210,12 @@ export class ScrollAnimator {
         this.currentTarget = null;
         this.animationFrameId = null;
         this.urlUpdateCallback = null;
-        this.isNavigating = false; // Navigation lock flag
 
-        // State Machine (source of truth for navigation)
+        // State Machine (data layer)
         this.stateMachine = new ScrollStateMachine();
+
+        // Navigation Coordinator (central state management)
+        this.navigationCoordinator = new NavigationCoordinator(this.stateMachine);
 
         // Planet camera offsets
         this.planetOffsets = {
@@ -48,18 +238,12 @@ export class ScrollAnimator {
         this.setupScrollTriggers();
         this.startTrackingLoop();
 
-        // Listen to state machine changes
-        this.stateMachine.setOnStateChange((state) => {
+        // Set up NavigationCoordinator callback for state changes
+        this.navigationCoordinator.setOnStateChange((state) => {
             if (state) {
                 // Update visuals and URL
                 this.updateVisualsForState(state);
                 this.updateUrl(state);
-
-                // ONLY scroll/snap if this was NOT a manual scroll
-                // If manual, user is already at the position roughly
-                if (!this.isManualScrolling) {
-                    this.scrollToState(state);
-                }
             } else {
                 // State is null -> God View
                 this.returnToGodView();
@@ -120,36 +304,22 @@ export class ScrollAnimator {
      * URL is source of truth, so just advance state machine and sync scroll
      */
     goToNextState() {
-        // Navigate to next state in state machine
-        const newState = this.stateMachine.next();
-        if (newState) {
-            this.scrollToState(newState);
-        }
+        // Use NavigationCoordinator for centralized state management
+        return this.navigationCoordinator.navigateNext();
     }
 
-    /**
-     * Navigate to previous state
-     * URL is source of truth, so just go to previous state and sync scroll
-     */
     goToPrevState() {
-        // Navigate to previous state in state machine
-        const newState = this.stateMachine.prev();
-        if (newState) {
-            this.scrollToState(newState);
-        } else {
-            // Explicitly returned to start (God View)
-            this.returnToGodView();
-        }
+        // Use NavigationCoordinator for centralized state management
+        return this.navigationCoordinator.navigatePrev();
     }
 
     /**
      * Jump to specific planet/card
      */
     goToPlanetCard(planet, card) {
-        const state = this.stateMachine.goToPlanetCard(planet, card);
-        if (state) {
-            this.scrollToState(state);
-        }
+        // Create state object and use NavigationCoordinator
+        const targetState = { planet, card };
+        return this.navigationCoordinator.goToState(targetState);
     }
 
     /**
@@ -200,24 +370,19 @@ export class ScrollAnimator {
         // For programmatic navigation (NEXT button, URL loading)
         // Keep navigating flag true until scroll actually completes
         this.isNavigating = true;
-        console.log(`🚀 Starting programmatic navigation to scroll position: ${targetScroll}`);
 
         // Use Lenis if available, otherwise fallback
         if (window.cosmicApp?.smoothScroll?.lenis) {
-            console.log(`🎯 Using Lenis for scroll navigation`);
             window.cosmicApp.smoothScroll.lenis.scrollTo(targetScroll, {
                 duration: 1.0,
                 onComplete: () => {
-                    console.log(`✅ Lenis scroll complete - resetting navigation flag`);
                     this.isNavigating = false;
                 }
             });
         } else {
-            console.log(`📜 Using native scroll for navigation`);
             window.scrollTo({ top: targetScroll, behavior: 'smooth' });
             // For native scroll, reset after animation completes
             setTimeout(() => {
-                console.log(`✅ Native scroll complete - resetting navigation flag`);
                 this.isNavigating = false;
             }, 1000);
         }
@@ -233,7 +398,6 @@ export class ScrollAnimator {
         const offset = this.planetOffsets[planet];
 
         if (!data) {
-            console.warn(`No data for planet: ${planet}`);
             return;
         }
 
@@ -291,7 +455,6 @@ export class ScrollAnimator {
     returnToGodView() {
         // Don't reset if we're in the middle of programmatic navigation
         if (this.isNavigating) {
-            console.log(`[${new Date().toISOString()}] 🚫 Skipping returnToGodView (isNavigating)`);
             return;
         }
 
@@ -348,16 +511,12 @@ export class ScrollAnimator {
         // Hero section - REMOVED for now to avoid interference with Next button navigation
         // Can be added back after Next button works 100%
 
-        // Planet sections - DISABLED temporarily for debugging
-        // Scroll triggers might be causing automatic navigation during load
-        console.log('🎯 Scroll triggers DISABLED for debugging - app will use manual navigation only');
-
-        /*
-        const planets = this.stateMachine.planets;
+        // Planet sections - Re-enabled with SOLID architecture
+        // Scroll triggers now work with proper state management
+        const planets = this.stateMachine.planetConfig.getPlanets();
         planets.forEach((planetId) => {
             const sceneElement = document.querySelector(`.scene--${planetId}`);
             if (!sceneElement) {
-                console.warn(`⚠️ Scene element .scene--${planetId} not found!`);
                 return;
             }
 
@@ -376,9 +535,9 @@ export class ScrollAnimator {
                         return; // Skip during programmatic navigation
                     }
 
-                    // Calculate which index in CENTRAL STATE ARRAY this scroll represents
+                    // Calculate which state this scroll position represents
                     const progress = self.progress;
-                    const planetIndex = this.stateMachine.planets.indexOf(planetId);
+                    const planetIndex = this.stateMachine.planetConfig.getPlanets().indexOf(planetId);
                     const cardsForPlanet = this.stateMachine.getCardsForPlanet(planetId);
 
                     // Each planet has (cardsForPlanet + 1) states in central array
@@ -388,20 +547,18 @@ export class ScrollAnimator {
                     // Calculate absolute index in central state array
                     let absoluteIndex = 0;
                     for (let i = 0; i < planetIndex; i++) {
-                        absoluteIndex += this.stateMachine.getCardsForPlanet(this.stateMachine.planets[i]) + 1;
+                        absoluteIndex += this.stateMachine.getCardsForPlanet(this.stateMachine.planetConfig.getPlanets()[i]) + 1;
                     }
                     absoluteIndex += localStateIndex;
 
-                    // Update central array index if user scrolled to new position
-                    if (this.stateMachine.currentIndex !== absoluteIndex) {
-                        console.log(`📜 Scroll → Central Array: ${this.stateMachine.currentIndex} → ${absoluteIndex}`);
-                        this.stateMachine.goTo(absoluteIndex);
-                        // This updates URL and visuals automatically
+                    // Get the target state and pass to NavigationCoordinator
+                    const targetState = this.stateMachine.getStateAt(absoluteIndex);
+                    if (targetState) {
+                        this.navigationCoordinator.handleScrollNavigation(targetState);
                     }
                 }
             });
         });
-        */
 
         // Contact section
         ScrollTrigger.create({
@@ -420,7 +577,6 @@ export class ScrollAnimator {
             opacity: 0, y: 30, duration: 1.5, delay: 0.5, ease: 'power3.out'
         });
 
-        console.log('✅ State Machine ScrollTriggers setup complete');
     }
 
     setUrlUpdateCallback(callback) {

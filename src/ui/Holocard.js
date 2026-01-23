@@ -232,7 +232,6 @@ export class Holocard {
      * Simplified: just triggers scroll by one viewport height
      */
     navigateToNextPlanet() {
-        console.log(`[${new Date().toISOString()}] 🔀 Next button clicked - scrolling down`);
         if (this.onNavigateToNext) {
             this.onNavigateToNext();
         }
@@ -256,7 +255,6 @@ export class Holocard {
 
         // Reset navigation state when new content is ready (arrival at planet)
         if (this.isNavigating) {
-            console.log('✅ Navigation complete, arrived at ' + data.id);
             this.isNavigating = false;
             if (this.nextBtn) this.nextBtn.classList.remove('disabled');
         }
@@ -291,14 +289,12 @@ export class Holocard {
                 const shouldUseFallback = this.shouldUseFallback();
 
                 if (shouldUseFallback) {
-                    console.log('Using fallback circle for mobile/Cursor environment');
                     this.createFallbackCircle(circleContainer, data);
                 } else {
                     // WebGL available, try 3D preview
                     try {
                         this.planetPreview.mount(circleContainer, data.id);
                     } catch (error) {
-                        console.warn('3D preview failed, using fallback:', error);
                         this.createFallbackCircle(circleContainer, data);
                     }
                 }
@@ -316,7 +312,6 @@ export class Holocard {
         this.wrapper.classList.add('hidden');
         this.isVisible = false;
 
-        console.log(`[${new Date().toISOString()}] 🎴 Prepared ${this.cards.length} cards for: ${data.id}`);
     }
 
     /**
@@ -429,15 +424,6 @@ export class Holocard {
         // Use fallback if: mobile, dev environment, low performance, or no WebGL
         const shouldFallback = isMobile || isDevEnv || isLowPerformance || !hasWebGL;
 
-        if (shouldFallback) {
-            console.log('Using fallback planet rendering. Reasons:', {
-                isMobile,
-                isDevEnv,
-                isLowPerformance,
-                hasWebGL: !hasWebGL
-            });
-        }
-
         return shouldFallback;
     }
 
@@ -484,7 +470,6 @@ export class Holocard {
 
             container.appendChild(circle);
         }).catch(error => {
-            console.warn('Could not load CONFIG for fallback, using basic fallback:', error);
             // Fallback to basic version if CONFIG import fails
             const circle = document.createElement('div');
             circle.className = 'fallback-circle';

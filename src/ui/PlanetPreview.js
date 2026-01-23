@@ -86,7 +86,6 @@ export class PlanetPreview {
 
         const config = CONFIG.planets[planetId];
         if (!config) {
-            console.warn(`Planet config not found for ${planetId}`);
             return;
         }
 
