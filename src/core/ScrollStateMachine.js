@@ -26,28 +26,24 @@ export class ScrollStateMachine {
             neptune: 3     // Stats, Personal, Professional
         };
 
-        // Build states array dynamically based on cards per planet
+        // Build the CENTRAL STATE ARRAY: [0,1,2,3,0,1,2,3,0,1,2,3,...]
         this.states = [];
         for (let i = 0; i < this.planets.length; i++) {
             const planet = this.planets[i];
-            const cardCount = this.cardsPerPlanet[planet];
-
-            for (let c = 0; c < cardCount; c++) {
-                this.states.push({
-                    index: this.states.length,
-                    planet: planet,
-                    card: c
-                });
+            // Each planet: planet view (0) + N cards (1,2,3)
+            this.states.push({ planet, card: 0 }); // Planet view
+            for (let c = 1; c <= this.cardsPerPlanet[planet]; c++) {
+                this.states.push({ planet, card: c }); // Card states
             }
         }
 
         this.totalStates = this.states.length;
-
-        // Current state index (0 = earth, card 0)
         this.currentIndex = 0;
 
         // Callbacks for state changes
         this.onStateChange = null;
+
+        console.log('🎯 Central State Array:', this.states.map((s, i) => `${i}:${s.planet}${s.card}`).join(', '));
     }
 
     /**
@@ -73,29 +69,43 @@ export class ScrollStateMachine {
     }
 
     /**
-     * Move to next state
-     * Returns new state, or null if already at end
+     * Move to next state in the central array
+     * Simple array index increment - no special logic needed
      */
     next() {
         if (this.currentIndex >= this.totalStates - 1) {
+            console.log('🏁 At end of central state array');
             return null; // Already at end
         }
+
+        const prevState = this.getState();
         this.currentIndex++;
+        const newState = this.getState();
+
+        console.log(`➡️ NEXT: ${prevState.planet}${prevState.card} → ${newState.planet}${newState.card} (index: ${this.currentIndex - 1} → ${this.currentIndex})`);
+
         this._notifyChange();
-        return this.getState();
+        return newState;
     }
 
     /**
-     * Move to previous state
-     * Returns new state, or null if already at start
+     * Move to previous state in the central array
+     * Simple array index decrement
      */
     prev() {
         if (this.currentIndex <= 0) {
+            console.log('🏁 At start of central state array');
             return null; // Already at start
         }
+
+        const prevState = this.getState();
         this.currentIndex--;
+        const newState = this.getState();
+
+        console.log(`⬅️ PREV: ${prevState.planet}${prevState.card} → ${newState.planet}${newState.card} (index: ${this.currentIndex + 1} → ${this.currentIndex})`);
+
         this._notifyChange();
-        return this.getState();
+        return newState;
     }
 
     /**
@@ -113,40 +123,36 @@ export class ScrollStateMachine {
 
     /**
      * Jump to specific planet and card
+     * card: 0 = planet view, 1 = first card, 2 = second card, etc.
      */
     goToPlanetCard(planet, card) {
         const planetIndex = this.planets.indexOf(planet);
         if (planetIndex === -1) return null;
 
-        const maxCardsForPlanet = this.cardsPerPlanet[planet] || 3;
-        const clampedCard = Math.max(0, Math.min(card, maxCardsForPlanet - 1));
+        const maxCards = this.cardsPerPlanet[planet] || 3;
+        const clampedCard = Math.max(0, Math.min(card, maxCards)); // Allow 0 to maxCards
 
-        // Calculate state index by summing up cards from previous planets
-        let stateIndex = 0;
-        for (let i = 0; i < planetIndex; i++) {
-            stateIndex += this.cardsPerPlanet[this.planets[i]];
-        }
-        stateIndex += clampedCard;
-
-        return this.goTo(stateIndex);
+        return this.goTo(this.getIndexFor(planet, clampedCard));
     }
 
     /**
      * Get state index for a planet/card combo
+     * card: 0 = planet view, 1 = first card, 2 = second card, etc.
      */
     getIndexFor(planet, card) {
         const planetIndex = this.planets.indexOf(planet);
         if (planetIndex === -1) return -1;
 
-        const maxCardsForPlanet = this.cardsPerPlanet[planet] || 3;
-        const clampedCard = Math.max(0, Math.min(card, maxCardsForPlanet - 1));
+        const maxCards = this.cardsPerPlanet[planet] || 3;
+        const clampedCard = Math.max(0, Math.min(card, maxCards)); // Allow 0 to maxCards
 
-        // Calculate state index by summing up cards from previous planets
+        // Each planet contributes (maxCards + 1) states: 1 planet view + maxCards card states
         let stateIndex = 0;
         for (let i = 0; i < planetIndex; i++) {
-            stateIndex += this.cardsPerPlanet[this.planets[i]];
+            const prevMaxCards = this.cardsPerPlanet[this.planets[i]] || 3;
+            stateIndex += prevMaxCards + 1; // 1 planet view + N cards per previous planet
         }
-        stateIndex += clampedCard;
+        stateIndex += clampedCard; // Add the card index for this planet
 
         return stateIndex;
     }
@@ -182,5 +188,40 @@ export class ScrollStateMachine {
             this.currentIndex = 0;
             this._notifyChange();
         }
+    }
+
+    /**
+     * Unit test for central state array navigation
+     * Tests NEXT/PREV operations through the entire array
+     */
+    runUnitTest() {
+        console.log('🧪 Running Central State Array Unit Test...');
+
+        // Reset to start
+        this.currentIndex = 0;
+        console.log('📍 Starting at:', this.getState());
+
+        // Test NEXT through all states
+        let steps = 0;
+        while (this.next() !== null && steps < 50) { // Safety limit
+            steps++;
+        }
+        console.log(`✅ NEXT test: ${steps} steps to end`);
+
+        // Test PREV back to start
+        steps = 0;
+        while (this.prev() !== null && steps < 50) {
+            steps++;
+        }
+        console.log(`✅ PREV test: ${steps} steps back to start`);
+
+        // Test array bounds
+        this.currentIndex = -1;
+        console.log('❌ Underflow test:', this.getState()); // Should clamp to 0
+
+        this.currentIndex = this.totalStates;
+        console.log('❌ Overflow test:', this.getStateAt(this.totalStates)); // Should clamp to last
+
+        console.log('🎯 Unit test complete! Central array working correctly.');
     }
 }

@@ -434,7 +434,7 @@ export class CosmicScene {
                 },
                 undefined,
                 (err) => {
-                    console.warn(`⚠️ Texture failed: ${texture}`);
+                    console.warn(`⚠️ Texture failed: ${texture}`, err);
                 }
             );
         }
@@ -570,16 +570,40 @@ export class CosmicScene {
         }
 
         const ringMat = new THREE.MeshBasicMaterial({
-            map: this.textureLoader.load('textures/saturn_texture_2k_small.jpg'),
             color: 0xcfb596,
             side: THREE.DoubleSide,
             transparent: true,
             opacity: 0.8
         });
 
+        // Load Saturn texture
+        this.textureLoader.load(
+            'textures/saturn_texture_2k_small.jpg',
+            (tex) => {
+                tex.colorSpace = THREE.SRGBColorSpace;
+                ringMat.map = tex;
+                ringMat.needsUpdate = true;
+            },
+            undefined,
+            (err) => {
+                console.warn(`⚠️ Saturn texture failed`, err);
+            }
+        );
+
+        // Load ring alpha texture
         if (CONFIG.planets.saturn.ringTexture) {
-            ringMat.map = this.textureLoader.load(CONFIG.planets.saturn.ringTexture);
-            ringMat.alphaMap = ringMat.map;
+            this.textureLoader.load(
+                CONFIG.planets.saturn.ringTexture,
+                (tex) => {
+                    tex.colorSpace = THREE.SRGBColorSpace;
+                    ringMat.alphaMap = tex;
+                    ringMat.needsUpdate = true;
+                },
+                undefined,
+                (err) => {
+                    console.warn(`⚠️ Saturn ring texture failed`, err);
+                }
+            );
         }
 
         const ring = new THREE.Mesh(ringGeo, ringMat);

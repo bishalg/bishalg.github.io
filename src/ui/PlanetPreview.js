@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
-import gsap from 'gsap';
+
+// GSAP is loaded globally
+const gsap = window.gsap;
 
 export class PlanetPreview {
     constructor() {

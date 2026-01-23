@@ -115,8 +115,13 @@ body {
     top: 0;
     left: 0;
     height: 100%;
-    width: 50%;
+    width: var(--progress, 50%);
     background: var(--color-cyan);
+    transition: width 0.3s ease;
+    /* Remove animation when we have real progress */
+}
+
+.loader-bar:not(.loader-bar--progress)::after {
     animation: loadBar 2s infinite;
 }
 
@@ -128,6 +133,12 @@ body {
     100% {
         transform: translateX(200%);
     }
+}
+
+/* Progress-based loader bar (can be controlled via JS) */
+.loader-bar--progress {
+    width: var(--progress, 0%);
+    transition: width 0.3s ease;
 }
 
 @keyframes pulse {
@@ -638,8 +649,10 @@ body {
     backdrop-filter: blur(20px);
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
     transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    will-change: transform;
+    will-change: transform, filter;
     cursor: grab;
+    /* Cosmic enhancement */
+    border-image: linear-gradient(45deg, rgba(0, 243, 255, 0.3), rgba(255, 170, 0, 0.3)) 1;
 }
 
 .holo-card::before {
@@ -859,28 +872,49 @@ body {
     width: 100%;
     height: 100%;
     border-radius: 50%;
-    background: radial-gradient(circle at center,
-        rgba(255, 255, 255, 0.1) 0%,
-        rgba(255, 255, 255, 0.05) 50%,
-        transparent 100%);
-    border: 2px solid var(--accent-color);
-    box-shadow: 0 0 30px var(--accent-color) inset, 0 0 20px var(--accent-color);
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
     animation: pulseObj 4s infinite ease-in-out;
+    overflow: hidden;
+}
+
+.fallback-sphere {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.fallback-texture-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    mix-blend-mode: multiply;
+    transition: opacity 0.3s ease;
 }
 
 .fallback-circle-content {
     text-align: center;
-    color: var(--accent-color);
+    color: rgba(255, 255, 255, 0.9);
+    z-index: 1;
+    position: relative;
 }
 
 .fallback-circle-symbol {
     font-size: 2rem;
     font-weight: bold;
     font-family: 'Cinzel', serif;
-    text-shadow: 0 0 15px var(--accent-color);
+    text-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
     margin-bottom: 5px;
 }
 
@@ -889,7 +923,8 @@ body {
     font-family: 'Courier Prime', monospace;
     text-transform: uppercase;
     letter-spacing: 1px;
-    opacity: 0.8;
+    opacity: 0.9;
+    text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
 .personal-narrative {
@@ -982,46 +1017,104 @@ body {
 }
 
 @media (max-width: 1024px) {
+    .holocard-wrapper {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 100;
+        overflow: hidden;
+    }
+
     .holocard-stack {
-        width: 95vw;
-        height: auto;
-        max-height: 100vh;
+        width: 100vw;
+        height: 100vh;
         overflow-y: scroll;
         scroll-behavior: smooth;
         /* Enable Scroll Snap */
         scroll-snap-type: y mandatory;
         -webkit-overflow-scrolling: touch;
+        /* Hide scrollbar for cleaner look */
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+
+    .holocard-stack::-webkit-scrollbar {
+        display: none;
     }
 
     .holo-card {
         position: relative;
-        width: 100%;
+        width: 100vw;
         min-height: 100vh;
         /* Full viewport height for snap */
         margin-bottom: 0;
         scroll-snap-align: start;
         scroll-snap-stop: always;
-        /* Center content vertically */
+        /* Center content vertically and add padding */
+        display: flex;
+        flex-direction: column;
         justify-content: center;
-        padding-top: 80px;
-        padding-bottom: 80px;
-        /* Space for button */
+        align-items: center;
+        padding: 100px 20px 120px 20px; /* Space for header and button */
         box-sizing: border-box;
         /* Reset stack positioning for mobile */
         transform: none !important;
+        /* Ensure proper spacing */
+        margin: 0;
+        /* Full width, no borders or shadows that might cause issues */
+        border-radius: 0;
+        box-shadow: none;
+        backdrop-filter: none;
+        background: rgba(0, 0, 5, 0.95);
+    }
+
+    .holo-card .card-header {
+        margin-bottom: 30px;
+        text-align: center;
+        width: 100%;
+        max-width: 400px;
+    }
+
+    .holo-card .card-header h2 {
+        font-size: 2rem;
+        margin: 0 0 10px 0;
+    }
+
+    .holo-card .card-content {
+        width: 100%;
+        max-width: 400px;
+        flex: 1;
+        overflow-y: auto;
+        padding: 0 10px;
     }
 
     .holocard-next-btn {
+        position: fixed;
         bottom: 30px;
-        /* Elevated for visibility */
+        left: 50%;
+        transform: translateX(-50%);
         z-index: 1000;
-        width: 50px;
-        height: 50px;
-        font-size: 1.2rem;
-        background: rgba(10, 15, 30, 0.9);
-        /* Darker background for contrast */
-        border: 1px solid var(--accent-color);
-        box-shadow: 0 0 15px rgba(0, 243, 255, 0.3);
+        width: 60px;
+        height: 60px;
+        font-size: 1.5rem;
+        background: rgba(10, 15, 30, 0.95);
+        border: 2px solid var(--accent-color);
+        box-shadow: 0 0 20px rgba(0, 243, 255, 0.4);
+        backdrop-filter: blur(10px);
+        /* Make it more prominent on mobile */
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .holocard-next-btn:hover {
+        transform: translateX(-50%) scale(1.1);
+        box-shadow: 0 0 30px rgba(0, 243, 255, 0.6);
     }
 }
 
