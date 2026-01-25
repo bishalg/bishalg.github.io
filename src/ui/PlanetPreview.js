@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
-import gsap from 'gsap';
+
+// GSAP is loaded globally
+const gsap = window.gsap;
 
 export class PlanetPreview {
     constructor() {
@@ -84,7 +86,6 @@ export class PlanetPreview {
 
         const config = CONFIG.planets[planetId];
         if (!config) {
-            console.warn(`Planet config not found for ${planetId}`);
             return;
         }
 

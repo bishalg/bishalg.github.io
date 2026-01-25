@@ -115,8 +115,13 @@ body {
     top: 0;
     left: 0;
     height: 100%;
-    width: 50%;
+    width: var(--progress, 50%);
     background: var(--color-cyan);
+    transition: width 0.3s ease;
+    /* Remove animation when we have real progress */
+}
+
+.loader-bar:not(.loader-bar--progress)::after {
     animation: loadBar 2s infinite;
 }
 
@@ -128,6 +133,12 @@ body {
     100% {
         transform: translateX(200%);
     }
+}
+
+/* Progress-based loader bar (can be controlled via JS) */
+.loader-bar--progress {
+    width: var(--progress, 0%);
+    transition: width 0.3s ease;
 }
 
 @keyframes pulse {
@@ -611,40 +622,153 @@ body {
     z-index: -1;
 }
 
-.holocard-content {
-    display: grid;
-    grid-template-columns: 1fr 1.2fr 1fr;
-    gap: 20px;
-    width: 90vw;
-    max-width: 1400px;
-    height: 70vh;
+.holocard-stack {
+    position: relative;
+    width: 100%;
+    height: 100%;
     pointer-events: auto;
-    transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.5s ease;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
-.holo-panel {
-    background: rgba(10, 15, 30, 0.7);
+.holo-card {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(10, 15, 30, 0.8);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
+    border-radius: 16px;
     padding: 24px;
+    width: 350px;
+    max-height: 500px;
     display: flex;
     flex-direction: column;
-    position: relative;
     overflow: hidden;
-    backdrop-filter: blur(16px);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    backdrop-filter: blur(20px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    will-change: transform, filter;
+    cursor: grab;
+    /* Cosmic enhancement */
+    border-image: linear-gradient(45deg, rgba(0, 243, 255, 0.3), rgba(255, 170, 0, 0.3)) 1;
 }
 
-.holo-panel::before {
+.holo-card::before {
     content: '';
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
-    height: 2px;
+    height: 3px;
     background: var(--accent-color, #00f3ff);
-    box-shadow: 0 0 15px var(--accent-color);
+    box-shadow: 0 0 20px var(--accent-color);
+}
+
+.holo-card.dragging {
+    cursor: grabbing;
+    transition: none;
+}
+
+.holo-card .card-header {
+    margin-bottom: 24px;
+    text-align: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 16px;
+}
+
+.holo-card .card-header h2 {
+    font-family: 'Cinzel', serif;
+    font-size: 2.2rem;
+    margin: 0;
+    color: var(--accent-color);
+    text-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.holo-card .card-content {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+
+.holo-card .card-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.holo-card .card-content::-webkit-scrollbar-thumb {
+    background: var(--accent-color);
+    border-radius: 2px;
+}
+
+.holo-card .card-content::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+/* Insights Card Styles */
+.insights-content {
+    padding: 16px 0;
+}
+
+.insights-content h3 {
+    font-family: 'Cinzel', serif;
+    color: var(--accent-color);
+    font-size: 1.5rem;
+    margin: 0 0 20px 0;
+    text-align: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 10px;
+}
+
+.project-highlight, .podcast-highlight {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+    transition: all 0.3s ease;
+}
+
+.project-highlight:hover, .podcast-highlight:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--accent-color);
+    transform: translateX(5px);
+}
+
+.project-highlight strong {
+    color: #fff;
+    font-family: 'Cinzel', serif;
+    display: block;
+    margin-bottom: 8px;
+    font-size: 1.1rem;
+}
+
+.project-highlight p {
+    color: #aaccff;
+    font-family: 'Courier Prime', monospace;
+    margin: 8px 0;
+    line-height: 1.5;
+}
+
+.project-highlight small {
+    color: #667788;
+    font-family: 'Courier Prime', monospace;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 1px;
+}
+
+.pod-title {
+    color: #fff;
+    font-weight: bold;
+    font-size: 0.9rem;
+    margin-bottom: 4px;
+}
+
+.pod-context {
+    color: #8899aa;
+    font-size: 0.75rem;
+    text-transform: uppercase;
 }
 
 .center-panel {
@@ -743,6 +867,66 @@ body {
     letter-spacing: 2px;
 }
 
+/* Fallback Circle for when WebGL is not available */
+.fallback-circle {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: pulseObj 4s infinite ease-in-out;
+    overflow: hidden;
+}
+
+.fallback-sphere {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.fallback-texture-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    mix-blend-mode: multiply;
+    transition: opacity 0.3s ease;
+}
+
+.fallback-circle-content {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.9);
+    z-index: 1;
+    position: relative;
+}
+
+.fallback-circle-symbol {
+    font-size: 2rem;
+    font-weight: bold;
+    font-family: 'Cinzel', serif;
+    text-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+    margin-bottom: 5px;
+}
+
+.fallback-circle-label {
+    font-size: 0.8rem;
+    font-family: 'Courier Prime', monospace;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.9;
+    text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
 .personal-narrative {
     text-align: center;
     margin-top: 20px;
@@ -816,52 +1000,121 @@ body {
     text-transform: uppercase;
 }
 
+/* Desktop Card Stack Styles */
+@media (min-width: 1025px) {
+    .holocard-stack {
+        position: relative;
+        width: 400px;
+        height: 600px;
+    }
+
+    .holo-card {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        max-width: 400px;
+    }
+}
+
 @media (max-width: 1024px) {
-    .holocard-content {
-        grid-template-columns: 1fr;
-        height: auto;
-        max-height: 100vh;
-        /* Full height */
+    .holocard-wrapper {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 100;
+        overflow: hidden;
+    }
+
+    .holocard-stack {
+        width: 100vw;
+        height: 100vh;
         overflow-y: scroll;
-        padding-bottom: 0;
-        /* Remove padding, handled by panel margin/padding */
         scroll-behavior: smooth;
         /* Enable Scroll Snap */
         scroll-snap-type: y mandatory;
         -webkit-overflow-scrolling: touch;
+        /* Hide scrollbar for cleaner look */
+        scrollbar-width: none;
+        -ms-overflow-style: none;
     }
 
-    .holo-panel {
+    .holocard-stack::-webkit-scrollbar {
+        display: none;
+    }
+
+    .holo-card {
+        position: relative;
+        width: 100vw;
         min-height: 100vh;
         /* Full viewport height for snap */
         margin-bottom: 0;
         scroll-snap-align: start;
         scroll-snap-stop: always;
-        /* Vertical center content */
+        /* Center content vertically and add padding */
+        display: flex;
+        flex-direction: column;
         justify-content: center;
-        /* Equal top/bottom padding to center content */
-        padding-top: 80px;
-        padding-bottom: 80px;
-        /* Space for button */
+        align-items: center;
+        padding: 100px 20px 120px 20px; /* Space for header and button */
         box-sizing: border-box;
+        /* Reset stack positioning for mobile */
+        transform: none !important;
+        /* Ensure proper spacing */
+        margin: 0;
+        /* Full width, no borders or shadows that might cause issues */
+        border-radius: 0;
+        box-shadow: none;
+        backdrop-filter: none;
+        background: rgba(0, 0, 5, 0.95);
     }
 
-    .center-panel {
-        transform: none;
-        order: -1;
+    .holo-card .card-header {
+        margin-bottom: 30px;
+        text-align: center;
+        width: 100%;
+        max-width: 400px;
+    }
+
+    .holo-card .card-header h2 {
+        font-size: 2rem;
+        margin: 0 0 10px 0;
+    }
+
+    .holo-card .card-content {
+        width: 100%;
+        max-width: 400px;
+        flex: 1;
+        overflow-y: auto;
+        padding: 0 10px;
     }
 
     .holocard-next-btn {
+        position: fixed;
         bottom: 30px;
-        /* Elevated for visibility */
+        left: 50%;
+        transform: translateX(-50%);
         z-index: 1000;
-        width: 50px;
-        height: 50px;
-        font-size: 1.2rem;
-        background: rgba(10, 15, 30, 0.9);
-        /* Darker background for contrast */
-        border: 1px solid var(--accent-color);
-        box-shadow: 0 0 15px rgba(0, 243, 255, 0.3);
+        width: 60px;
+        height: 60px;
+        font-size: 1.5rem;
+        background: rgba(10, 15, 30, 0.95);
+        border: 2px solid var(--accent-color);
+        box-shadow: 0 0 20px rgba(0, 243, 255, 0.4);
+        backdrop-filter: blur(10px);
+        /* Make it more prominent on mobile */
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .holocard-next-btn:hover {
+        transform: translateX(-50%) scale(1.1);
+        box-shadow: 0 0 30px rgba(0, 243, 255, 0.6);
     }
 }
 

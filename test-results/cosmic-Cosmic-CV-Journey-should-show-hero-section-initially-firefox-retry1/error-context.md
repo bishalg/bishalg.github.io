@@ -1,0 +1,369 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - navigation [ref=e4]:
+      - generic [ref=e5]:
+        - link "Astro Fusion" [ref=e6] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e7]: Astro Fusion
+        - generic [ref=e8]:
+          - link "Kundali" [ref=e9] [cursor=pointer]:
+            - /url: /kundali
+          - link "Learning" [ref=e10] [cursor=pointer]:
+            - /url: /learning
+          - link "Tools" [ref=e11] [cursor=pointer]:
+            - /url: /tools
+          - link "Panchang" [ref=e12] [cursor=pointer]:
+            - /url: /tools/panchanga
+        - generic [ref=e13]:
+          - button "Switch theme to light" [ref=e14] [cursor=pointer]:
+            - img [ref=e15]
+          - button "Login" [ref=e21] [cursor=pointer]
+    - main [ref=e22]:
+      - generic [ref=e23]:
+        - generic [ref=e25]:
+          - generic [ref=e26]:
+            - heading "Unlock the Stars, Embrace Your Transformation." [level=1] [ref=e27]:
+              - text: Unlock the Stars,
+              - text: Embrace Your
+              - generic [ref=e28]:
+                - generic [ref=e29]: Transformation.
+                - generic [ref=e31]:
+                  - generic [ref=e32]: A
+                  - generic [ref=e33]: w
+                  - generic [ref=e34]: a
+                  - generic [ref=e35]: k
+                  - generic [ref=e36]: e
+                  - generic [ref=e37]: "n"
+                  - generic [ref=e38]: i
+                  - generic [ref=e39]: "n"
+                  - generic [ref=e40]: g
+                  - generic [ref=e41]: .
+            - paragraph [ref=e42]: Discover your cosmic path with our AI-powered astrology chat app. Get personalized readings, birth charts, and dasha period analysis.
+          - main [ref=e43]:
+            - generic [ref=e45]:
+              - generic [ref=e48]:
+                - button "Show NOW view - Top view with Lagna line at top" [ref=e49] [cursor=pointer]:
+                  - img [ref=e50]
+                - button "Go to GeoCentric View" [ref=e54] [cursor=pointer]:
+                  - img [ref=e55]
+                - button "Pause Animations" [ref=e57] [cursor=pointer]:
+                  - img [ref=e58]
+                - 'button "Next Object: Moon" [ref=e60] [cursor=pointer]':
+                  - img [ref=e61]
+                - button "Enter Fullscreen" [ref=e63] [cursor=pointer]:
+                  - img [ref=e64]
+              - generic [ref=e68]:
+                - generic [ref=e71]:
+                  - heading "Interactive Solar System" [level=4] [ref=e72]
+                  - paragraph [ref=e73]: Hover over planets and zodiac signs to explore their mysteries
+                - generic [ref=e74]: Click to learn more
+          - generic [ref=e76]:
+            - link "Booking" [ref=e77] [cursor=pointer]:
+              - /url: /booking
+            - link "Schedule" [ref=e78] [cursor=pointer]:
+              - /url: /schedules
+        - generic [ref=e80]:
+          - paragraph [ref=e81]:
+            - generic [ref=e82]: Discover
+            - generic [ref=e83]: Your
+            - generic [ref=e84]: Cosmic
+            - generic [ref=e85]: Journey
+          - generic [ref=e86]:
+            - link "Shadbala Calculator Calculate complete planetary strength analysis using traditional Vedic Shadbala system. Discover your strongest planets and weakest areas. Calculate Strength" [ref=e87] [cursor=pointer]:
+              - /url: /tools/strength
+              - img [ref=e89]
+              - img [ref=e93]
+              - heading "Shadbala Calculator" [level=3] [ref=e99]
+              - paragraph [ref=e100]: Calculate complete planetary strength analysis using traditional Vedic Shadbala system. Discover your strongest planets and weakest areas.
+              - generic [ref=e102]: Calculate Strength
+            - link "Numerology Discover your Destiny, Personality, and Name numbers using the Lo Shu Grid and advanced numerology methods. Explore Numerology" [ref=e103] [cursor=pointer]:
+              - /url: /tools/numerology
+              - img [ref=e105]
+              - img [ref=e109]
+              - heading "Numerology" [level=3] [ref=e120]
+              - paragraph [ref=e121]: Discover your Destiny, Personality, and Name numbers using the Lo Shu Grid and advanced numerology methods.
+              - generic [ref=e123]: Explore Numerology
+            - link "Celebrity Database Explore birth charts and astrological profiles of famous personalities from around the world. View Celebrities" [ref=e124] [cursor=pointer]:
+              - /url: /tools/celebrity
+              - img [ref=e126]
+              - img [ref=e130]
+              - heading "Celebrity Database" [level=3] [ref=e134]
+              - paragraph [ref=e135]: Explore birth charts and astrological profiles of famous personalities from around the world.
+              - generic [ref=e137]: View Celebrities
+            - link "Nepali Date Converter Convert Nepali (BS) dates to English (AD) and vice versa with instant accuracy. Convert Dates" [ref=e138] [cursor=pointer]:
+              - /url: /tools/nepali_date_converter
+              - img [ref=e140]
+              - img [ref=e144]
+              - heading "Nepali Date Converter" [level=3] [ref=e155]
+              - paragraph [ref=e156]: Convert Nepali (BS) dates to English (AD) and vice versa with instant accuracy.
+              - generic [ref=e158]: Convert Dates
+            - link "Astrology Tools Access calculators, dasha analyzers, and more astrology tools for deeper insights. Explore Tools" [ref=e159] [cursor=pointer]:
+              - /url: /tools
+              - img [ref=e161]
+              - img [ref=e165]
+              - heading "Astrology Tools" [level=3] [ref=e167]
+              - paragraph [ref=e168]: Access calculators, dasha analyzers, and more astrology tools for deeper insights.
+              - generic [ref=e170]: Explore Tools
+        - generic [ref=e171]:
+          - generic [ref=e173]:
+            - generic [ref=e174]:
+              - paragraph [ref=e175]:
+                - generic [ref=e176]: Detailed
+                - generic [ref=e177]: Birth
+                - generic [ref=e178]: Chart
+                - generic [ref=e179]: Analysis
+              - paragraph [ref=e180]: Get your personalized birth chart in just three quick steps. Enter your details and unlock your cosmic insights instantly!
+              - generic [ref=e181]:
+                - generic [ref=e182]: STEP
+                - generic [ref=e184]:
+                  - generic [ref=e185] [cursor=pointer]: "1"
+                  - generic [ref=e186]: DOB
+                - generic [ref=e190]:
+                  - generic [ref=e191] [cursor=pointer]: "2"
+                  - generic [ref=e192]: Time
+                - generic [ref=e196]:
+                  - generic [ref=e197] [cursor=pointer]: "3"
+                  - generic [ref=e198]: Location
+              - generic [ref=e199]:
+                - generic [ref=e200]:
+                  - generic [ref=e201]: Date of Birth
+                  - textbox "Date of Birth" [ref=e203]
+                  - generic [ref=e204]: No signup required. Quick and fast birth chart generator.
+                  - generic [ref=e205]:
+                    - button "Next" [disabled]
+                - text: Popular Countries Popular Cities Koshi Province (कोशी प्रदेश) Madhesh Province (मधेश प्रदेश) Bagmati Province (बागमती प्रदेश) Gandaki Province (गण्डकी प्रदेश) Lumbini Province (लुम्बिनी प्रदेश) Karnali Province (कर्णाली प्रदेश) Sudurpashchim Province (सुदूरपश्चिम प्रदेश)
+            - img "Circular Astrology Chart" [ref=e211]:
+              - text: ♂♀☿☽☉☿♀♂♃♄♄♃
+              - text: 8 | ♏9 | ♐10 | ♑11 | ♒12 | ♓1 | ♈2 | ♉3 | ♊4 | ♋5 | ♌6 | ♍7 | ♎
+              - text: "123456789101112"
+              - generic [ref=e721]:
+                - text: Asc
+                - generic [ref=e722]: 0.0°
+              - generic [ref=e724]:
+                - text: Sun
+                - generic [ref=e725]: 8.6°
+              - generic [ref=e727]:
+                - text: Moo
+                - generic [ref=e728]: 26.6°
+              - generic [ref=e730]:
+                - text: Mar
+                - generic [ref=e731]: 5.4°
+              - generic [ref=e733]:
+                - text: Mer
+                - generic [ref=e734]: 9.4°
+              - generic [ref=e736]:
+                - text: (Jup)
+                - generic [ref=e737]: 24.2°
+              - generic [ref=e739]:
+                - text: Ven
+                - generic [ref=e740]: 12.5°
+              - generic [ref=e742]:
+                - text: Sat
+                - generic [ref=e743]: 3.6°
+              - generic [ref=e745]:
+                - text: Rah
+                - generic [ref=e746]: 15.1°
+              - generic [ref=e748]:
+                - text: (Ket)
+                - generic [ref=e749]: 15.1°
+              - generic [ref=e750]:
+                - text: E
+                - text: W
+                - text: S
+                - text: "N"
+          - generic [ref=e756]:
+            - heading "Discover Your Planetary Strength" [level=3] [ref=e757]
+            - paragraph [ref=e758]: Now that you have your birth chart, calculate the strength of each planet using the traditional Shadbala system. Find out which planets are strongest in your chart!
+            - button "Calculate Planetary Strength" [ref=e759] [cursor=pointer]
+        - generic [ref=e762]:
+          - generic [ref=e763]:
+            - heading "AI-Powered Astrology Chat" [level=2] [ref=e764]:
+              - paragraph [ref=e765]:
+                - generic [ref=e766]: AI-Powered
+                - generic [ref=e767]: Astrology
+                - generic [ref=e768]: Chat
+            - paragraph [ref=e769]: Get instant astrological guidance with our AI chat assistant. Ask questions about your chart, compatibility, career, relationships, and more.
+            - list [ref=e770]:
+              - listitem [ref=e771]:
+                - generic [ref=e772]: ✓
+                - generic [ref=e773]: Personalized insights based on your birth chart
+              - listitem [ref=e774]:
+                - generic [ref=e775]: ✓
+                - generic [ref=e776]: 24/7 availability for guidance whenever you need it
+              - listitem [ref=e777]:
+                - generic [ref=e778]: ✓
+                - generic [ref=e779]: Detailed explanations of astrological concepts
+              - listitem [ref=e780]:
+                - generic [ref=e781]: ✓
+                - generic [ref=e782]: Compatibility analysis with friends and partners
+            - link "Start Chatting Now" [ref=e783] [cursor=pointer]:
+              - /url: /chat-ai
+          - generic [ref=e786]:
+            - generic [ref=e788]:
+              - generic [ref=e790]: 🔮
+              - generic [ref=e791]:
+                - heading "AI Astrologer" [level=3] [ref=e792]
+                - paragraph [ref=e793]: Online • Ready to help
+            - generic [ref=e801]:
+              - generic [ref=e802]:
+                - generic [ref=e804]: U
+                - generic [ref=e805]:
+                  - generic [ref=e806]:
+                    - generic [ref=e807]: You
+                    - generic [ref=e808]: 2:30 PM
+                  - paragraph [ref=e810]: Hi! I'd like to know about my career prospects this year.
+              - generic [ref=e811]:
+                - generic [ref=e813]: 🔮
+                - generic [ref=e814]:
+                  - generic [ref=e815]:
+                    - generic [ref=e816]: AI Astrologer
+                    - generic [ref=e817]: 2:31 PM
+                  - paragraph [ref=e819]: Hello! I'd be happy to help you explore your career insights. Could you please share your birth date, time, and location so I can analyze your chart?
+              - generic [ref=e821]: 🔮
+            - generic [ref=e828]:
+              - generic [ref=e829]:
+                - generic [ref=e830]: Ask about your future, love, career...
+                - button "Send" [ref=e831]
+              - paragraph [ref=e832]: ✨ Preview Mode - Click "Start Chatting Now" to begin your real conversation
+        - generic [ref=e834]:
+          - heading "What Our Users Say" [level=2] [ref=e835]:
+            - paragraph [ref=e836]:
+              - generic [ref=e837]: What
+              - generic [ref=e838]: Our
+              - generic [ref=e839]: Users
+              - generic [ref=e840]: Say
+          - generic [ref=e842]:
+            - generic [ref=e844]:
+              - img "Prechya B." [ref=e847]
+              - img "Santosh T." [ref=e850]
+              - img "Roshni K." [ref=e853]
+              - img "Anita S." [ref=e856]
+              - img "Rajesh M." [ref=e859]
+            - generic [ref=e860]:
+              - generic [ref=e861]:
+                - heading "Santosh T." [level=3] [ref=e862]
+                - paragraph [ref=e863]: California
+                - img [ref=e865]
+                - paragraph [ref=e868]:
+                  - generic [ref=e869]: I
+                  - generic [ref=e870]: love
+                  - generic [ref=e871]: the
+                  - generic [ref=e872]: AI
+                  - generic [ref=e873]: chat
+                  - generic [ref=e874]: feature!
+                  - generic [ref=e875]: It's
+                  - generic [ref=e876]: like
+                  - generic [ref=e877]: having
+                  - generic [ref=e878]: an
+                  - generic [ref=e879]: astrologer
+                  - generic [ref=e880]: available
+                  - generic [ref=e881]: 24/7
+                  - generic [ref=e882]: to
+                  - generic [ref=e883]: answer
+                  - generic [ref=e884]: all
+                  - generic [ref=e885]: my
+                  - generic [ref=e886]: questions.
+              - generic [ref=e887]:
+                - button "Previous testimonial" [ref=e888] [cursor=pointer]:
+                  - img [ref=e889]
+                - button "Next testimonial" [ref=e891] [cursor=pointer]:
+                  - img [ref=e892]
+              - generic [ref=e894]:
+                - button "Go to testimonial 1" [ref=e895] [cursor=pointer]
+                - button "Go to testimonial 2" [ref=e896] [cursor=pointer]
+                - button "Go to testimonial 3" [ref=e897] [cursor=pointer]
+                - button "Go to testimonial 4" [ref=e898] [cursor=pointer]
+                - button "Go to testimonial 5" [ref=e899] [cursor=pointer]
+        - generic [ref=e900]:
+          - generic [ref=e901]:
+            - heading "Follow me 👇" [level=5] [ref=e902]
+            - generic [ref=e903]:
+              - link "Follow on TikTok" [ref=e904] [cursor=pointer]:
+                - /url: https://www.tiktok.com/@astro.fusion369
+                - img "TikTok" [ref=e905]
+              - link "Follow on YouTube" [ref=e906] [cursor=pointer]:
+                - /url: https://www.youtube.com/@AstroFusion369
+                - img "YouTube" [ref=e907]
+              - link "Follow on Instagram" [ref=e908] [cursor=pointer]:
+                - /url: https://www.instagram.com/astro_fusion_com/
+                - img "Instagram" [ref=e909]
+          - generic [ref=e911]:
+            - heading "Ready to Discover Your Cosmic Path?" [level=2] [ref=e912]
+            - paragraph [ref=e913]: Start your astrological journey today with Astro Fusion. Get personalized insights, create your birth chart, and chat with our AI assistant.
+            - generic [ref=e914]:
+              - link "Start Chatting" [ref=e915] [cursor=pointer]:
+                - /url: /chat-ai
+              - link "Create Birth Chart" [ref=e916] [cursor=pointer]:
+                - /url: /kundali
+              - link "Calculate Strength" [ref=e917] [cursor=pointer]:
+                - /url: /tools/strength
+          - generic [ref=e919]:
+            - generic [ref=e920]:
+              - generic [ref=e921]:
+                - heading "Astro Fusion" [level=3] [ref=e922]
+                - paragraph [ref=e923]: Discover your cosmic path with our AI-powered astrology platform.
+              - generic [ref=e924]:
+                - heading "Features" [level=4] [ref=e925]
+                - list [ref=e926]:
+                  - listitem [ref=e927]:
+                    - link "AI Chat" [ref=e928] [cursor=pointer]:
+                      - /url: /chat-ai
+                  - listitem [ref=e929]:
+                    - link "Birth Chart" [ref=e930] [cursor=pointer]:
+                      - /url: /birth-chart
+                  - listitem [ref=e931]:
+                    - link "Astrology Tools" [ref=e932] [cursor=pointer]:
+                      - /url: /tools
+                  - listitem [ref=e933]:
+                    - link "Expert Booking" [ref=e934] [cursor=pointer]:
+                      - /url: /booking
+              - generic [ref=e935]:
+                - heading "Resources" [level=4] [ref=e936]
+                - list [ref=e937]:
+                  - listitem [ref=e938]:
+                    - link "Blog" [ref=e939] [cursor=pointer]:
+                      - /url: /blog
+                  - listitem [ref=e940]:
+                    - link "Learn Astrology" [ref=e941] [cursor=pointer]:
+                      - /url: /blogs-md
+                  - listitem [ref=e942]:
+                    - link "FAQ" [ref=e943] [cursor=pointer]:
+                      - /url: /faq
+              - generic [ref=e944]:
+                - heading "Connect" [level=4] [ref=e945]
+                - list [ref=e946]:
+                  - listitem [ref=e947]:
+                    - link "Contact Us" [ref=e948] [cursor=pointer]:
+                      - /url: /contact
+                  - listitem [ref=e949]:
+                    - link "About Us" [ref=e950] [cursor=pointer]:
+                      - /url: /about
+                  - listitem [ref=e951]:
+                    - link "Privacy Policy" [ref=e952] [cursor=pointer]:
+                      - /url: /privacy
+                  - listitem [ref=e953]:
+                    - button "Cookie Settings" [ref=e954] [cursor=pointer]
+                  - listitem [ref=e955]:
+                    - link "Twitter" [ref=e956] [cursor=pointer]:
+                      - /url: "#"
+                      - generic [ref=e957]: Twitter
+                      - img [ref=e958]
+                    - link "Instagram" [ref=e959] [cursor=pointer]:
+                      - /url: "#"
+                      - generic [ref=e960]: Instagram
+                      - img [ref=e961]
+            - generic [ref=e962]:
+              - paragraph [ref=e963]: © 2026 Astro Fusion. All rights reserved.
+              - button "Cookie Settings" [ref=e965] [cursor=pointer]
+      - button "En" [ref=e967] [cursor=pointer]:
+        - img [ref=e968]
+        - generic [ref=e972]: En
+  - region "Notifications (F8)":
+    - list
+  - button "Open Next.js Dev Tools" [ref=e978] [cursor=pointer]:
+    - img [ref=e979]
+  - alert [ref=e983]
+```

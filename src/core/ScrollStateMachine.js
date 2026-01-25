@@ -1,122 +1,343 @@
 /**
  * ScrollStateMachine.js
  * Pure state machine for scroll navigation - NO DOM, NO GSAP
- * 
+ *
  * State Structure:
- * - 9 planets × 4 cards = 36 total states (0-35)
+ * - 9 planets × variable cards per planet
  * - Each state: { index, planet, card }
- * - card: 0 = planet focus, 1-3 = card panels
+ * - card: 0 = planet focus, 1-n = card stack (variable per planet)
  */
 
-export class ScrollStateMachine {
-    constructor() {
-        // Define planet order
-        this.planets = ['earth', 'sun', 'moon', 'mars', 'mercury', 'jupiter', 'venus', 'saturn', 'neptune'];
-        this.cardsPerPlanet = 4; // 0=focus, 1=card1, 2=card2, 3=card3
-        this.totalStates = this.planets.length * this.cardsPerPlanet; // 36
-
-        // Build states array
-        this.states = [];
-        for (let i = 0; i < this.planets.length; i++) {
-            for (let c = 0; c < this.cardsPerPlanet; c++) {
-                this.states.push({
-                    index: this.states.length,
-                    planet: this.planets[i],
-                    card: c
-                });
-            }
+/**
+ * NavigationState - Immutable state representation
+ * Single Responsibility: Data container with validation
+ */
+class NavigationState {
+    constructor(planet, card, globalIndex = -1) {
+        if (!planet || typeof planet !== 'string') {
+            throw new Error('Planet must be a non-empty string');
+        }
+        if (!Number.isInteger(card) || card < 0) {
+            throw new Error('Card must be a non-negative integer');
         }
 
-        // Current state index (-1 = God View/Start)
-        this.currentIndex = -1;
+        this.planet = planet;
+        this.card = card;      // 0 = planet view, 1-N = cards
+        this.globalIndex = globalIndex; // Global position in navigation graph
+        this.index = globalIndex; // Alias for backward compatibility
+        Object.freeze(this);   // Immutable
+    }
 
-        // Callbacks for state changes
+    equals(other) {
+        return other instanceof NavigationState &&
+               this.planet === other.planet &&
+               this.card === other.card;
+    }
+
+    toString() {
+        return `${this.planet}${this.card}`;
+    }
+
+    isPlanetView() {
+        return this.card === 0;
+    }
+
+    isCardView() {
+        return this.card > 0;
+    }
+}
+
+/**
+ * DoublyLinkedListNode - Node for doubly linked list
+ * Enables O(1) navigation in both directions
+ */
+class DoublyLinkedListNode {
+    constructor(data) {
+        this.data = data;
+        this.prev = null;
+        this.next = null;
+    }
+}
+
+/**
+ * DoublyLinkedList - Efficient navigation structure
+ * Single Responsibility: Bidirectional linked list operations
+ * Time Complexity: O(1) for next/prev, O(n) for find operations
+ */
+class DoublyLinkedList {
+    constructor() {
+        this.head = null;
+        this.tail = null;
+        this.current = null;
+        this.size = 0;
+    }
+
+    append(data) {
+        const newNode = new DoublyLinkedListNode(data);
+
+        if (!this.head) {
+            this.head = this.tail = this.current = newNode;
+        } else {
+            newNode.prev = this.tail;
+            this.tail.next = newNode;
+            this.tail = newNode;
+        }
+
+        this.size++;
+        return this;
+    }
+
+    getCurrent() {
+        return this.current ? this.current.data : null;
+    }
+
+    next() {
+        if (!this.current || !this.current.next) return null;
+        this.current = this.current.next;
+        this.currentIndex++;
+        return this.getCurrent();
+    }
+
+    prev() {
+        if (!this.current || !this.current.prev) return null;
+        this.current = this.current.prev;
+        this.currentIndex--;
+        return this.getCurrent();
+    }
+
+    goTo(predicate) {
+        let node = this.head;
+        let index = 0;
+
+        while (node) {
+            if (predicate(node.data, index)) {
+                this.current = node;
+                return node.data;
+            }
+            node = node.next;
+            index++;
+        }
+
+        return null; // Not found
+    }
+
+    findIndex(predicate) {
+        let node = this.head;
+        let index = 0;
+
+        while (node) {
+            if (predicate(node.data, index)) {
+                return index;
+            }
+            node = node.next;
+            index++;
+        }
+
+        return -1;
+    }
+
+    getAt(index) {
+        if (index < 0 || index >= this.size) return null;
+
+        let node = this.head;
+        for (let i = 0; i < index; i++) {
+            node = node.next;
+        }
+
+        return node.data;
+    }
+
+    get length() {
+        return this.size;
+    }
+}
+
+/**
+ * PlanetConfiguration - Immutable configuration repository
+ * Single Responsibility: Planet metadata with validation
+ * Open/Closed: New planets can be added without modifying existing code
+ */
+class PlanetConfiguration {
+    constructor() {
+        // Immutable planet definitions
+        this._planets = Object.freeze([
+            'earth', 'sun', 'moon', 'mars', 'mercury',
+            'jupiter', 'venus', 'saturn', 'neptune'
+        ]);
+
+        // Card counts per planet - extensible configuration
+        this._cardCounts = Object.freeze({
+            earth: 3, sun: 3, moon: 3, mars: 3, mercury: 3,
+            jupiter: 3, venus: 3, saturn: 3, neptune: 3
+        });
+    }
+
+    getPlanets() {
+        return [...this._planets]; // Return copy to prevent external mutation
+    }
+
+    getCardCount(planet) {
+        if (!this.isValidPlanet(planet)) {
+            throw new Error(`Invalid planet: ${planet}`);
+        }
+        return this._cardCounts[planet];
+    }
+
+    isValidPlanet(planet) {
+        return this._planets.includes(planet);
+    }
+
+    getPlanetIndex(planet) {
+        return this._planets.indexOf(planet);
+    }
+}
+
+/**
+ * ScrollStateMachine - Main state machine following SOLID principles
+ * - Single Responsibility: State management and navigation logic
+ * - Open/Closed: Extensible through composition and interfaces
+ * - Liskov Substitution: Uses abstract data structures
+ * - Interface Segregation: Clean, focused interface
+ * - Dependency Inversion: Depends on abstractions, not concretions
+ */
+export class ScrollStateMachine {
+    constructor() {
+        this.planetConfig = new PlanetConfiguration();
+        this.navigationGraph = new DoublyLinkedList();
+
+        this.buildNavigationGraph();
         this.onStateChange = null;
     }
 
     /**
-     * Get total number of states
+     * Build the navigation graph using doubly linked list
+     * Each planet contributes: 1 planet view + N card states
+     * Creates a linear sequence that can be navigated bidirectionally
+     */
+    buildNavigationGraph() {
+        const planets = this.planetConfig.getPlanets();
+        let globalIndex = 0;
+
+        for (const planet of planets) {
+            // Planet view state (card = 0)
+            this.navigationGraph.append(new NavigationState(planet, 0, globalIndex++));
+
+            // Card states (card = 1 to N)
+            const cardCount = this.planetConfig.getCardCount(planet);
+            for (let card = 1; card <= cardCount; card++) {
+                this.navigationGraph.append(new NavigationState(planet, card, globalIndex++));
+            }
+        }
+    }
+
+    /**
+     * Get total number of states in navigation graph
      */
     getTotal() {
-        return this.totalStates;
+        return this.navigationGraph.length;
     }
 
     /**
-     * Get current state
-     * Returns null if at God View (-1)
+     * Get current navigation state
      */
     getState() {
-        if (this.currentIndex === -1) return null;
-        return this.states[this.currentIndex];
+        return this.navigationGraph.getCurrent();
     }
 
     /**
-     * Get state by index (with bounds clamping)
+     * Get state by global index
      */
     getStateAt(index) {
-        const clampedIndex = Math.max(0, Math.min(index, this.totalStates - 1));
-        return this.states[clampedIndex];
+        return this.navigationGraph.getAt(index);
     }
 
     /**
-     * Move to next state
-     * Returns new state, or null if already at end
+     * Navigate to next state in linked list
+     * O(1) operation due to doubly linked structure
      */
     next() {
-        if (this.currentIndex >= this.totalStates - 1) {
-            return null; // Already at end
-        }
-        this.currentIndex++;
-        this._notifyChange();
-        return this.getState();
-    }
-
-    /**
-     * Move to previous state
-     * Returns new state, or null (God View) if going back from 0
-     */
-    prev() {
-        if (this.currentIndex <= -1) {
-            return null; // Already at start/God View
-        }
-        this.currentIndex--;
-        this._notifyChange();
-        return this.getState();
-    }
-
-    /**
-     * Jump to specific state index
-     * Clamps to valid range
-     */
-    goTo(index) {
-        const clampedIndex = Math.max(0, Math.min(index, this.totalStates - 1));
-        if (clampedIndex !== this.currentIndex) {
-            this.currentIndex = clampedIndex;
+        const newState = this.navigationGraph.next();
+        if (newState) {
             this._notifyChange();
         }
-        return this.getState();
+        return newState;
     }
 
     /**
-     * Jump to specific planet and card
+     * Navigate to previous state in linked list
+     * O(1) operation due to doubly linked structure
      */
-    goToPlanetCard(planet, card) {
-        const planetIndex = this.planets.indexOf(planet);
-        if (planetIndex === -1) return null;
-
-        const clampedCard = Math.max(0, Math.min(card, this.cardsPerPlanet - 1));
-        const stateIndex = (planetIndex * this.cardsPerPlanet) + clampedCard;
-        return this.goTo(stateIndex);
+    prev() {
+        const newState = this.navigationGraph.prev();
+        if (newState) {
+            this._notifyChange();
+        }
+        return newState;
     }
 
     /**
-     * Get state index for a planet/card combo
+     * Jump to specific state by global index
+     * Clamps to valid bounds instead of returning null
+     */
+    goTo(index) {
+        const clampedIndex = Math.max(0, Math.min(index, this.getTotal() - 1));
+        const currentState = this.getState();
+        const newState = this.navigationGraph.goTo((state, idx) => idx === clampedIndex);
+
+        if (newState && !currentState.equals(newState)) {
+            this._notifyChange();
+        }
+
+        return newState;
+    }
+
+    /**
+     * Get the global index for a specific planet and card
+     * Useful for direct index calculations
      */
     getIndexFor(planet, card) {
-        const planetIndex = this.planets.indexOf(planet);
-        if (planetIndex === -1) return -1;
-        const clampedCard = Math.max(0, Math.min(card, this.cardsPerPlanet - 1));
-        return (planetIndex * this.cardsPerPlanet) + clampedCard;
+        if (!this.planetConfig.isValidPlanet(planet)) {
+            return -1;
+        }
+
+        const maxCards = this.planetConfig.getCardCount(planet);
+        const clampedCard = Math.max(0, Math.min(card, maxCards));
+
+        // Calculate index: (planet index * states per planet) + card index
+        const planetIndex = this.planetConfig.getPlanetIndex(planet);
+        return (planetIndex * (maxCards + 1)) + clampedCard;
+    }
+
+    /**
+     * Jump to specific planet and card state
+     * Demonstrates proper data structure usage with predicate functions
+     */
+    goToPlanetCard(planet, card) {
+        if (!this.planetConfig.isValidPlanet(planet)) {
+            return null;
+        }
+
+        const maxCards = this.planetConfig.getCardCount(planet);
+        const clampedCard = Math.max(0, Math.min(card, maxCards));
+
+        // Use linked list's goTo with predicate function
+        const newState = this.navigationGraph.goTo(state =>
+            state.planet === planet && state.card === clampedCard
+        );
+
+        if (newState) {
+            this._notifyChange();
+        }
+
+        return newState;
+    }
+
+    /**
+     * Get the number of cards for a specific planet
+     * Demonstrates proper abstraction through PlanetConfiguration
+     */
+    getCardsForPlanet(planet) {
+        return this.planetConfig.getCardCount(planet);
     }
 
     /**
@@ -136,12 +357,11 @@ export class ScrollStateMachine {
     }
 
     /**
-     * Reset to initial state (God View)
+     * Reset to initial state
+     * Clean state restoration
      */
     reset() {
-        if (this.currentIndex !== -1) {
-            this.currentIndex = -1;
-            this._notifyChange();
-        }
+        this.navigationGraph.goTo((state, index) => index === 0);
+        this._notifyChange();
     }
 }

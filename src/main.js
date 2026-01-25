@@ -7,9 +7,11 @@ import { ScrollAnimator } from './core/ScrollAnimator.js';
 import { Holocard } from './ui/Holocard.js';
 import { solarSystemData } from './data/solarSystemData.js';
 import * as THREE from 'three';
-import gsap from 'gsap';
-import Lenis from '@studio-freight/lenis';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
+
+// GSAP and Lenis are loaded globally
+const gsap = window.gsap;
+const ScrollTrigger = window.ScrollTrigger;
+const Lenis = window.Lenis;
 
 // Make globals available if needed by legacy scripts (though we should avoid this)
 window.THREE = THREE;
@@ -22,14 +24,45 @@ class App {
     }
 
     init() {
-        THREE.DefaultLoadingManager.onLoad = () => {
-            const loader = document.getElementById('loader');
-            if (loader) {
-                loader.classList.add('loader--hidden');
-                setTimeout(() => loader.remove(), 800);
+        // Simple loading simulation - start immediately since textures load asynchronously
+        const loaderText = document.querySelector('.loader-text');
+        if (!loaderText) {
+            return; // Silent fail in production
+        }
+
+        // Show loading progress animation
+        let progress = 0;
+        const loaderBar = document.querySelector('.loader-bar');
+        const loader = document.getElementById('loader');
+
+        const progressInterval = setInterval(() => {
+            progress += Math.random() * 15; // Random progress increments
+            if (progress > 100) progress = 100;
+
+            if (loaderText) {
+                loaderText.textContent = `INITIALIZING COSMIC TIMELINE... ${Math.floor(progress)}%`;
             }
-            this.start();
-        };
+
+            if (loaderBar) {
+                loaderBar.style.setProperty('--progress', `${progress}%`);
+                loaderBar.classList.add('loader-bar--progress');
+            }
+
+            if (progress >= 100) {
+                clearInterval(progressInterval);
+
+                // Hide loader and start
+                if (loader) {
+                    loader.classList.add('loader--hidden');
+                    setTimeout(() => {
+                        if (loader.parentNode) {
+                            loader.parentNode.removeChild(loader);
+                        }
+                        this.start();
+                    }, 800);
+                }
+            }
+        }, 200);
 
         // Initialize Components
         this.cosmicScene = new CosmicScene();
@@ -61,11 +94,27 @@ class App {
 
         // Setup URL state sync (deep linking)
         this.setupUrlStateSync();
+
+
+        // Ensure we start within reasonable time even if progress simulation fails
+        setTimeout(() => {
+            if (!loader.classList.contains('loader--hidden')) {
+                clearInterval(progressInterval);
+                console.log('⏰ Forcing start after timeout...');
+                loader.classList.add('loader--hidden');
+                setTimeout(() => {
+                    if (loader.parentNode) {
+                        loader.parentNode.removeChild(loader);
+                    }
+                    this.start();
+                }, 800);
+            }
+        }, 5000);
     }
 
     // Valid planet IDs for URL validation
     static VALID_PLANETS = ['earth', 'sun', 'moon', 'mars', 'mercury', 'jupiter', 'venus', 'saturn', 'neptune'];
-    static MAX_CARDS = 3;
+    static MAX_CARDS = 3; // Card states per planet (0=planet view, 1-3=card states)
 
     /**
      * Setup URL state sync - read params on load, update on scroll
@@ -75,14 +124,12 @@ class App {
         const planet = params.get('planet');
         const cardParam = params.get('card');
 
-        // Validate planet
-        if (planet && App.VALID_PLANETS.includes(planet)) {
-            // Clamp card to valid range (0 to MAX_CARDS)
+        // Only restore state if URL actually has parameters
+        if (planet && cardParam !== null && App.VALID_PLANETS.includes(planet)) {
+            // Clamp card to valid range (0=planet view, 1-MAX_CARDS=card states)
             let card = parseInt(cardParam, 10);
             if (isNaN(card) || card < 0) card = 0;
             if (card > App.MAX_CARDS) card = App.MAX_CARDS;
-
-            console.log(`[URL] Restoring state: planet=${planet}, card=${card}`);
 
             // Wait for smooth scroll to be ready, then scroll
             setTimeout(() => {
@@ -91,8 +138,9 @@ class App {
         }
 
         // Set callback for scroll animator to update URL
-        this.scrollAnimator.setUrlUpdateCallback((planetId, cardCount) => {
-            this.updateUrlState(planetId, cardCount);
+        // Now passes NavigationState objects following SOLID principles
+        this.scrollAnimator.setUrlUpdateCallback((state) => {
+            this.updateUrlState(state);
         });
     }
 
@@ -106,8 +154,30 @@ class App {
 
     /**
      * Update URL with current state (no page reload)
+     * Now works with NavigationState objects following SOLID principles
      */
-    updateUrlState(planet, card) {
+    updateUrlState(state) {
+        // Handle different input types (backward compatibility)
+        let planet, card;
+        if (state && typeof state === 'object' && state.planet) {
+            // New NavigationState object
+            planet = state.planet;
+            card = state.card;
+        } else if (typeof state === 'string') {
+            // Legacy string format (planet name)
+            planet = state;
+            card = arguments[1] || 0;
+        } else {
+            // Invalid state
+            return;
+        }
+
+        // If at initial state (earth, card 0), clear URL to clean state
+        if (planet === 'earth' && card === 0) {
+            window.history.replaceState({}, '', window.location.pathname);
+            return;
+        }
+
         // If no planet (God View), clear params
         if (!planet) {
             window.history.replaceState({}, '', window.location.pathname);
@@ -162,6 +232,13 @@ class App {
                 }
             }
         });
+
+        // Card swipe navigation (advance to next card)
+        this.holocard.setCardAdvanceCallback(() => {
+            if (this.scrollAnimator) {
+                this.scrollAnimator.goToNextState();
+            }
+        });
     }
 
     setupPlanetClickHandler() {
@@ -169,7 +246,6 @@ class App {
         this.cosmicScene.setPlanetClickCallback((planetName) => {
             const targetSection = document.querySelector(`.scene--${planetName}`);
             if (targetSection) {
-                console.log(`🪐 Planet clicked: ${planetName}, scrolling to section`);
                 this.smoothScroll.lenis.scrollTo(targetSection, { duration: 1.5 });
             }
         });
@@ -245,8 +321,20 @@ class SmoothScroll {
 }
 
 // Initializer
-document.addEventListener('DOMContentLoaded', () => {
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        startApp();
+    });
+} else {
+    startApp();
+}
+
+function startApp() {
     if (window.WebGLRenderingContext) {
-        window.cosmicApp = new App();
+        try {
+            window.cosmicApp = new App();
+        } catch (error) {
+            // Silent fail in production
+        }
     }
-});
+}

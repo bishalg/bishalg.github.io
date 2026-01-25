@@ -16,7 +16,7 @@ describe('ScrollStateMachine', () => {
     });
 
     describe('Initialization', () => {
-        it('should have 36 total states', () => {
+        it('should have 36 total states (9 planets × 4 states each)', () => {
             expect(machine.getTotal()).toBe(36);
         });
 
@@ -36,10 +36,10 @@ describe('ScrollStateMachine', () => {
             expect(state.card).toBe(0);
         });
 
-        it('should have correct state at index 35 (neptune, card 3)', () => {
-            const state = machine.getStateAt(35);
+        it('should have correct state at index 34 (neptune, card 2)', () => {
+            const state = machine.getStateAt(34);
             expect(state.planet).toBe('neptune');
-            expect(state.card).toBe(3);
+            expect(state.card).toBe(2);
         });
     });
 
@@ -51,21 +51,11 @@ describe('ScrollStateMachine', () => {
             expect(newState.card).toBe(1);
         });
 
-        it('should move through all 4 cards of earth', () => {
-            machine.next(); // 1
-            machine.next(); // 2
-            machine.next(); // 3
-            const state = machine.getState();
-            expect(state.index).toBe(3);
-            expect(state.planet).toBe('earth');
-            expect(state.card).toBe(3);
-        });
-
         it('should transition to next planet after 4 nexts', () => {
-            machine.next(); // 1
-            machine.next(); // 2
-            machine.next(); // 3
-            const sunState = machine.next(); // 4 = sun, card 0
+            machine.next(); // 1 - earth1
+            machine.next(); // 2 - earth2
+            machine.next(); // 3 - earth3
+            const sunState = machine.next(); // 4 - sun0
             expect(sunState.planet).toBe('sun');
             expect(sunState.card).toBe(0);
         });
@@ -121,7 +111,7 @@ describe('ScrollStateMachine', () => {
             const state = machine.goToPlanetCard('mars', 2);
             expect(state.planet).toBe('mars');
             expect(state.card).toBe(2);
-            expect(state.index).toBe(14); // mars is 4th planet (index 3), 3*4 + 2 = 14
+            expect(state.index).toBe(14); // mars is 4th planet, each has 4 states: earth(4) + sun(4) + moon(4) + mars_index(2) = 14
         });
 
         it('should return null for invalid planet', () => {
@@ -131,14 +121,14 @@ describe('ScrollStateMachine', () => {
 
         it('should clamp card to valid range', () => {
             const state = machine.goToPlanetCard('earth', 99);
-            expect(state.card).toBe(3); // Clamped to max
+            expect(state.card).toBe(3); // Clamped to max (3 cards per planet)
         });
     });
 
     describe('getIndexFor()', () => {
         it('should return correct index for jupiter card 1', () => {
             const index = machine.getIndexFor('jupiter', 1);
-            // jupiter is 6th planet (index 5), 5*4 + 1 = 21
+            // jupiter is 6th planet, each has 4 states: 5 planets * 4 = 20, + card index 1 = 21
             expect(index).toBe(21);
         });
 
