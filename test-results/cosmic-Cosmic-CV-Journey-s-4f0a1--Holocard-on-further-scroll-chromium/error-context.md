@@ -1,34 +1,87 @@
 # Page snapshot
 
 ```yaml
-- generic [active] [ref=e1]:
-  - main:
-    - generic [ref=e3]:
-      - heading "BISHAL GHIMIRE" [level=1] [ref=e5]
-      - paragraph [ref=e6]: Cosmic Coder
-      - button "Start time travel to explore planets" [ref=e7] [cursor=pointer]:
-        - text: LET'S TIME TRAVEL?
-        - generic [ref=e8]: ↓
-    - generic:
-      - generic:
-        - heading "END TRANSMISSION" [level=2]
-        - generic:
-          - link "LINKEDIN":
-            - /url: "#"
-          - link "GITHUB":
-            - /url: "#"
-          - link "EMAIL":
-            - /url: "#"
-  - generic:
-    - generic: Sun
-    - generic: Mercury
-    - generic: Venus
-    - generic: Earth
-    - generic: Mars
-    - generic: Jupiter
-    - generic: Saturn
-    - generic: Uranus
-    - generic: Moon
-  - button "Go to next planet": →
-  - button "Scroll to top": ↑
+- generic [ref=e1]:
+  - generic [active]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]:
+          - navigation [ref=e7]:
+            - button "previous" [disabled] [ref=e8]:
+              - img "previous" [ref=e9]
+            - generic [ref=e11]:
+              - generic [ref=e12]: 1/
+              - text: "1"
+            - button "next" [disabled] [ref=e13]:
+              - img "next" [ref=e14]
+          - img
+        - generic [ref=e16]:
+          - link "Next.js 16.1.1 (stale) Turbopack" [ref=e17] [cursor=pointer]:
+            - /url: https://nextjs.org/docs/messages/version-staleness
+            - img [ref=e18]
+            - generic "There is a newer version (16.1.5) available, upgrade recommended!" [ref=e20]: Next.js 16.1.1 (stale)
+            - generic [ref=e21]: Turbopack
+          - img
+      - dialog "Build Error" [ref=e23]:
+        - generic [ref=e26]:
+          - generic [ref=e27]:
+            - generic [ref=e28]:
+              - generic [ref=e30]: Build Error
+              - generic [ref=e31]:
+                - button "Copy Error Info" [ref=e32] [cursor=pointer]:
+                  - img [ref=e33]
+                - button "No related documentation found" [disabled] [ref=e35]:
+                  - img [ref=e36]
+                - button "Attach Node.js inspector" [ref=e38] [cursor=pointer]:
+                  - img [ref=e39]
+            - generic [ref=e48]: Parsing ecmascript source code failed
+          - generic [ref=e50]:
+            - generic [ref=e52]:
+              - img [ref=e54]
+              - generic [ref=e57]: ./apps/web/src/app/kundali/page.tsx (178:12)
+              - button "Open in editor" [ref=e58] [cursor=pointer]:
+                - img [ref=e60]
+            - generic [ref=e63]:
+              - generic [ref=e64]: Parsing ecmascript source code failed
+              - generic [ref=e65]: 176 |
+              - text: <UserSearchParams
+              - generic [ref=e66]: "{"
+              - text: ...
+              - generic [ref=e67]: (userPreference
+              - text: "?"
+              - generic [ref=e68]: "{ userPreference }"
+              - text: ":"
+              - generic [ref=e69]: "{})}"
+              - text: />
+              - generic [ref=e70]: 177 |
+              - text: ">"
+              - generic [ref=e71]: 178 |
+              - text: <div
+              - generic [ref=e72]: className
+              - text: =
+              - generic [ref=e73]: "\"w-full max-w-[1920px] mx-auto md:px-4 lg:px-6 xl:px-8 overflow-x-hidden\""
+              - text: ">"
+              - generic [ref=e74]: "|"
+              - text: ^^^^^^^^^
+              - generic [ref=e75]: 179 |
+              - text: <KundaliView
+              - generic [ref=e76]: 180 |
+              - generic [ref=e77]: key
+              - text: =
+              - generic [ref=e78]: "{uniqueKey}"
+              - generic [ref=e79]: 181 |
+              - generic [ref=e80]: viewModel
+              - text: "={viewModel}"
+              - generic [ref=e81]: "Expected ';', '}' or <eof>"
+        - generic [ref=e82]: "1"
+        - generic [ref=e83]: "2"
+    - generic [ref=e88] [cursor=pointer]:
+      - button "Open Next.js Dev Tools" [ref=e89]:
+        - img [ref=e90]
+      - button "Open issues overlay" [ref=e94]:
+        - generic [ref=e95]:
+          - generic [ref=e96]: "0"
+          - generic [ref=e97]: "1"
+        - generic [ref=e98]: Issue
+  - 'heading "Application error: a client-side exception has occurred while loading localhost (see the browser console for more information)." [level=2] [ref=e101]'
 ```

@@ -26,11 +26,11 @@
     <!-- WebGL Canvas (Background) -->
     <canvas id="cosmic-canvas"></canvas>
 
-    <!-- Scroll Container -->
-    <main class="scroll-container">
+    <!-- Scroll Container with CSS Snap -->
+    <main class="scroll-container" id="scroll-container">
 
-        <!-- Scene 0: The Void (Hero) -->
-        <section class="scene scene--hero">
+        <!-- Page 0: Welcome -->
+        <section class="page page--welcome" id="welcome">
             <div class="hud-frame hud-frame--hero">
                 <div class="hud-line hud-line--top"></div>
                 <h1 class="hero-title">BISHAL GHIMIRE</h1>
@@ -42,53 +42,62 @@
             </div>
         </section>
 
-        <!-- Scene 1: Earth (Origins) -->
-        <section class="scene scene--earth">
-            <div class="hud-frame hud-frame--right"></div>
-        </section>
+        <!-- Earth: Pages 1-4 -->
+        <section class="page page--planet" id="earth-0" data-planet="earth" data-card="0"></section>
+        <section class="page page--card" id="earth-1" data-planet="earth" data-card="1"></section>
+        <section class="page page--card" id="earth-2" data-planet="earth" data-card="2"></section>
+        <section class="page page--card" id="earth-3" data-planet="earth" data-card="3"></section>
 
-        <!-- Scene 2: Sun (Father/Leadership) -->
-        <section class="scene scene--sun">
-            <div class="hud-frame hud-frame--center"></div>
-        </section>
+        <!-- Sun: Pages 5-8 -->
+        <section class="page page--planet" id="sun-0" data-planet="sun" data-card="0"></section>
+        <section class="page page--card" id="sun-1" data-planet="sun" data-card="1"></section>
+        <section class="page page--card" id="sun-2" data-planet="sun" data-card="2"></section>
+        <section class="page page--card" id="sun-3" data-planet="sun" data-card="3"></section>
 
-        <!-- Scene 3: Moon (Mother/Mind) -->
-        <section class="scene scene--moon">
-            <div class="hud-frame hud-frame--left"></div>
-        </section>
+        <!-- Moon: Pages 9-12 -->
+        <section class="page page--planet" id="moon-0" data-planet="moon" data-card="0"></section>
+        <section class="page page--card" id="moon-1" data-planet="moon" data-card="1"></section>
+        <section class="page page--card" id="moon-2" data-planet="moon" data-card="2"></section>
+        <section class="page page--card" id="moon-3" data-planet="moon" data-card="3"></section>
 
-        <!-- Scene 4: Mars (Siblings/Energy) -->
-        <section class="scene scene--mars">
-            <div class="hud-frame hud-frame--right"></div>
-        </section>
+        <!-- Mars: Pages 13-16 -->
+        <section class="page page--planet" id="mars-0" data-planet="mars" data-card="0"></section>
+        <section class="page page--card" id="mars-1" data-planet="mars" data-card="1"></section>
+        <section class="page page--card" id="mars-2" data-planet="mars" data-card="2"></section>
+        <section class="page page--card" id="mars-3" data-planet="mars" data-card="3"></section>
 
-        <!-- Scene 5: Mercury (Child/Communication) -->
-        <section class="scene scene--mercury">
-            <div class="hud-frame hud-frame--left"></div>
-        </section>
+        <!-- Mercury: Pages 17-20 -->
+        <section class="page page--planet" id="mercury-0" data-planet="mercury" data-card="0"></section>
+        <section class="page page--card" id="mercury-1" data-planet="mercury" data-card="1"></section>
+        <section class="page page--card" id="mercury-2" data-planet="mercury" data-card="2"></section>
+        <section class="page page--card" id="mercury-3" data-planet="mercury" data-card="3"></section>
 
-        <!-- Scene 6: Jupiter (Teachers/Wisdom) -->
-        <section class="scene scene--jupiter">
-            <div class="hud-frame hud-frame--center"></div>
-        </section>
+        <!-- Jupiter: Pages 21-24 -->
+        <section class="page page--planet" id="jupiter-0" data-planet="jupiter" data-card="0"></section>
+        <section class="page page--card" id="jupiter-1" data-planet="jupiter" data-card="1"></section>
+        <section class="page page--card" id="jupiter-2" data-planet="jupiter" data-card="2"></section>
+        <section class="page page--card" id="jupiter-3" data-planet="jupiter" data-card="3"></section>
 
-        <!-- Scene 7: Venus (Spouse/Arts) -->
-        <section class="scene scene--venus">
-            <div class="hud-frame hud-frame--right"></div>
-        </section>
+        <!-- Venus: Pages 25-28 -->
+        <section class="page page--planet" id="venus-0" data-planet="venus" data-card="0"></section>
+        <section class="page page--card" id="venus-1" data-planet="venus" data-card="1"></section>
+        <section class="page page--card" id="venus-2" data-planet="venus" data-card="2"></section>
+        <section class="page page--card" id="venus-3" data-planet="venus" data-card="3"></section>
 
-        <!-- Scene 8: Saturn (Work/Karma) -->
-        <section class="scene scene--saturn">
-            <div class="hud-frame hud-frame--left"></div>
-        </section>
+        <!-- Saturn: Pages 29-32 -->
+        <section class="page page--planet" id="saturn-0" data-planet="saturn" data-card="0"></section>
+        <section class="page page--card" id="saturn-1" data-planet="saturn" data-card="1"></section>
+        <section class="page page--card" id="saturn-2" data-planet="saturn" data-card="2"></section>
+        <section class="page page--card" id="saturn-3" data-planet="saturn" data-card="3"></section>
 
-        <!-- Scene 9: Neptune (Spirituality/Pets) -->
-        <section class="scene scene--neptune">
-            <div class="hud-frame hud-frame--center"></div>
-        </section>
+        <!-- Neptune: Pages 33-36 -->
+        <section class="page page--planet" id="neptune-0" data-planet="neptune" data-card="0"></section>
+        <section class="page page--card" id="neptune-1" data-planet="neptune" data-card="1"></section>
+        <section class="page page--card" id="neptune-2" data-planet="neptune" data-card="2"></section>
+        <section class="page page--card" id="neptune-3" data-planet="neptune" data-card="3"></section>
 
-        <!-- Contact / Footer -->
-        <section class="scene scene--contact">
+        <!-- Page 37: End -->
+        <section class="page page--end" id="end">
             <div class="contact-frame">
                 <h2>END TRANSMISSION</h2>
                 <div class="contact-links">
@@ -99,6 +108,7 @@
             </div>
         </section>
     </main>
+
 
     <!-- GSAP (loaded globally for compatibility) -->
     <script src="https://unpkg.com/gsap@3.14.2/dist/gsap.min.js"></script>

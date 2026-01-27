@@ -4,7 +4,7 @@
   "description": "A customized 3D portfolio based on the Solar System metaphor.",
   "main": "src/main.js",
   "scripts": {
-    "start": "serve .",
+    "start": "serve -l 3030 .",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
     "test": "npm run test:unit && npm run test:e2e",
