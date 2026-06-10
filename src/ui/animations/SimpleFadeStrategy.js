@@ -1,11 +1,11 @@
 /**
  * SimpleFadeStrategy.js
  * Implements a simple fade-in/out animation for cards.
- * No complex transforms, just opacity and display toggling.
+ * Uses GSAP autoAlpha (opacity + visibility) rather than manual display toggling
+ * to avoid the race condition where onComplete fires after the card was re-shown.
  */
 import { AnimationStrategy } from './AnimationStrategy.js';
 
-// GSAP is expected to be loaded globally
 const gsap = window.gsap;
 
 export class SimpleFadeStrategy extends AnimationStrategy {
@@ -14,26 +14,15 @@ export class SimpleFadeStrategy extends AnimationStrategy {
     }
 
     enter(container, cards, data) {
-        // Initial setup for cards when entering a new planet
+        // Set only autoAlpha/zIndex — do NOT touch x/y/scale/rotation because
+        // GSAP writing those properties replaces CSS transform:translate(-50%,-50%)
+        // centering with translate3d(0,0,0), breaking card positioning.
         cards.forEach((card, index) => {
-            gsap.set(card, {
-                opacity: 0,
-                display: 'none',
-                scale: 1,
-                x: 0,
-                y: 0,
-                rotation: 0,
-                zIndex: cards.length - index
-            });
+            gsap.set(card, { autoAlpha: 0, zIndex: cards.length - index });
         });
     }
 
     update(cards, activeIndex, progress = 0) {
-        // activeIndex 0 = Planet View (no cards)
-        // activeIndex 1 = Card 0
-        // activeIndex 2 = Card 1
-        // etc.
-
         if (activeIndex === 0) {
             this.exit(cards);
             return;
@@ -42,42 +31,17 @@ export class SimpleFadeStrategy extends AnimationStrategy {
         const targetArrayIndex = activeIndex - 1;
 
         cards.forEach((card, index) => {
-            if (index === targetArrayIndex) {
-                // Show this card
-                if (card.style.display !== 'block' || card.style.opacity < 1) {
-                    card.style.display = 'block';
-                    gsap.to(card, {
-                        opacity: 1,
-                        duration: 0.3,
-                        overwrite: true
-                    });
-                }
-            } else {
-                // Hide other cards
-                if (card.style.display !== 'none') {
-                    gsap.to(card, {
-                        opacity: 0,
-                        duration: 0.2,
-                        overwrite: true,
-                        onComplete: () => {
-                            card.style.display = 'none';
-                        }
-                    });
-                }
-            }
+            // overwrite:true cancels any in-progress tween on this card,
+            // preventing the old onComplete from firing after a rapid state change.
+            gsap.to(card, {
+                autoAlpha: index === targetArrayIndex ? 1 : 0,
+                duration: index === targetArrayIndex ? 0.3 : 0.2,
+                overwrite: true
+            });
         });
     }
 
     exit(cards) {
-        cards.forEach(card => {
-            gsap.to(card, {
-                opacity: 0,
-                duration: 0.3,
-                overwrite: true,
-                onComplete: () => {
-                    card.style.display = 'none';
-                }
-            });
-        });
+        gsap.to(cards, { autoAlpha: 0, duration: 0.3, overwrite: true });
     }
 }
