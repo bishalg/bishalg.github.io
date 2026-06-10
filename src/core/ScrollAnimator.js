@@ -217,6 +217,10 @@ export class ScrollAnimator {
         // Navigation Coordinator (central state management)
         this.navigationCoordinator = new NavigationCoordinator(this.stateMachine);
 
+        // Deduplication cache — prevents visual updates when scroll position stays in same state
+        this._lastScrollPlanet = null;
+        this._lastScrollCard = -1;
+
         // Planet camera offsets
         this.planetOffsets = {
             earth: { x: 12, y: 4, z: 12 },
@@ -554,7 +558,13 @@ export class ScrollAnimator {
                     // Get the target state and pass to NavigationCoordinator
                     const targetState = this.stateMachine.getStateAt(absoluteIndex);
                     if (targetState) {
-                        this.navigationCoordinator.handleScrollNavigation(targetState);
+                        // Deduplicate: skip if state hasn't changed to avoid hammering visuals
+                        if (targetState.planet !== this._lastScrollPlanet ||
+                            targetState.card !== this._lastScrollCard) {
+                            this._lastScrollPlanet = targetState.planet;
+                            this._lastScrollCard = targetState.card;
+                            this.navigationCoordinator.handleScrollNavigation(targetState);
+                        }
                     }
                 }
             });

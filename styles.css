@@ -636,8 +636,8 @@ body {
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(10, 15, 30, 0.8);
+    /* Centering via GSAP xPercent/yPercent — no CSS transform to avoid conflicts */
+    background: rgba(10, 15, 30, 0.85);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 16px;
     padding: 24px;
@@ -646,12 +646,11 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    backdrop-filter: blur(20px);
+    backdrop-filter: blur(6px);
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
-    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    will-change: transform, filter;
+    /* Transitions handled by GSAP, not CSS */
+    will-change: transform;
     cursor: grab;
-    /* Cosmic enhancement */
     border-image: linear-gradient(45deg, rgba(0, 243, 255, 0.3), rgba(255, 170, 0, 0.3)) 1;
 }
 
@@ -1031,11 +1030,10 @@ body {
         width: 100vw;
         height: 100vh;
         overflow-y: scroll;
-        scroll-behavior: smooth;
-        /* Enable Scroll Snap */
+        /* scroll-behavior controlled by JS for precise snap+smooth control */
         scroll-snap-type: y mandatory;
         -webkit-overflow-scrolling: touch;
-        /* Hide scrollbar for cleaner look */
+        overscroll-behavior: contain;
         scrollbar-width: none;
         -ms-overflow-style: none;
     }
@@ -1048,26 +1046,23 @@ body {
         position: relative;
         width: 100vw;
         min-height: 100vh;
-        /* Full viewport height for snap */
         margin-bottom: 0;
         scroll-snap-align: start;
         scroll-snap-stop: always;
-        /* Center content vertically and add padding */
         display: flex;
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        padding: 100px 20px 120px 20px; /* Space for header and button */
+        padding: 100px 20px 120px 20px;
         box-sizing: border-box;
-        /* Reset stack positioning for mobile */
-        transform: none !important;
-        /* Ensure proper spacing */
+        /* No transform override — GSAP only animates opacity on mobile */
         margin: 0;
-        /* Full width, no borders or shadows that might cause issues */
         border-radius: 0;
         box-shadow: none;
         backdrop-filter: none;
         background: rgba(0, 0, 5, 0.95);
+        /* GPU layer hint for scroll performance */
+        transform: translateZ(0);
     }
 
     .holo-card .card-header {

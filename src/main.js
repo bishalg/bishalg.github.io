@@ -310,8 +310,8 @@ class SmoothScroll {
         this.lenis = new Lenis({
             duration: 1.2,
             easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-            direction: 'vertical',
-            smooth: true
+            smoothTouch: false,  // Native scroll on touch — faster and less jittery
+            touchMultiplier: 1.5
         });
 
         this.lenis.on('scroll', ScrollTrigger.update);

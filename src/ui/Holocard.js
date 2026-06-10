@@ -61,6 +61,9 @@ export class Holocard {
         this.currentTranslateX = 0;
         this.currentTranslateY = 0;
 
+        // Tracks which card is currently on top of the visible stack
+        this.currentStartIndex = 0;
+
         // Callback for when card is swiped away
         this.onCardAdvance = null;
 
@@ -95,10 +98,10 @@ export class Holocard {
         this.wrapper.addEventListener('mouseup', (e) => this.handlePointerUp(e));
         this.wrapper.addEventListener('mouseleave', (e) => this.handlePointerUp(e));
 
-        // Touch events for mobile
-        this.wrapper.addEventListener('touchstart', (e) => this.handlePointerDown(e), { passive: false });
-        this.wrapper.addEventListener('touchmove', (e) => this.handlePointerMove(e), { passive: false });
-        this.wrapper.addEventListener('touchend', (e) => this.handlePointerUp(e), { passive: false });
+        // Touch events for mobile — passive:true since we never call preventDefault on touch
+        this.wrapper.addEventListener('touchstart', (e) => this.handlePointerDown(e), { passive: true });
+        this.wrapper.addEventListener('touchmove', (e) => this.handlePointerMove(e), { passive: true });
+        this.wrapper.addEventListener('touchend', (e) => this.handlePointerUp(e), { passive: true });
     }
 
     /**
@@ -106,6 +109,7 @@ export class Holocard {
      */
     handlePointerDown(e) {
         if (!this.isVisible || this.cards.length === 0) return;
+        if (window.innerWidth <= 1024) return; // Mobile uses native scroll-snap, no drag
 
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -116,11 +120,8 @@ export class Holocard {
         this.currentTranslateX = 0;
         this.currentTranslateY = 0;
 
-        // Add dragging class to top card
-        const topCard = this.cards[0]; // Top card is always index 0
-        if (topCard) {
-            topCard.classList.add('dragging');
-        }
+        const topCard = this.cards[this.currentStartIndex];
+        if (topCard) topCard.classList.add('dragging');
     }
 
     /**
@@ -128,6 +129,8 @@ export class Holocard {
      */
     handlePointerMove(e) {
         if (!this.isDragging || this.cards.length === 0) return;
+        // Mobile: let the scroll-snap container handle touch events natively
+        if (window.innerWidth <= 1024) return;
 
         e.preventDefault();
 
@@ -137,12 +140,14 @@ export class Holocard {
         this.currentTranslateX = clientX - this.dragStartX;
         this.currentTranslateY = clientY - this.dragStartY;
 
-        // Apply transform to top card
-        const topCard = this.cards[0]; // Top card is always index 0
+        const topCard = this.cards[this.currentStartIndex];
         if (topCard) {
-            const rotation = this.currentTranslateX * 0.1; // Slight rotation based on horizontal movement
-            // Apply drag transform on top of the base centering transform
-            topCard.style.transform = `translate(-50%, -50%) translate(${this.currentTranslateX}px, ${this.currentTranslateY}px) rotate(${rotation}deg)`;
+            // Use GSAP set so it composes with xPercent/yPercent centering correctly
+            gsap.set(topCard, {
+                x: this.currentTranslateX,
+                y: this.currentTranslateY,
+                rotation: this.currentTranslateX * 0.05
+            });
         }
     }
 
@@ -154,40 +159,27 @@ export class Holocard {
 
         this.isDragging = false;
 
-        const topCard = this.cards[0]; // Top card is always index 0
+        const topCard = this.cards[this.currentStartIndex];
         if (!topCard) return;
 
         topCard.classList.remove('dragging');
 
-        // Check if swipe distance is enough to trigger card removal
-        const swipeThreshold = 50; // Reduced for easier testing
-        const isSwipeLeft = this.currentTranslateX < -swipeThreshold;
-        const isSwipeRight = this.currentTranslateX > swipeThreshold;
-
-        if (isSwipeLeft || isSwipeRight) {
-            // Animate card off screen
-            const direction = isSwipeLeft ? -1 : 1;
+        const swipeThreshold = 80;
+        if (Math.abs(this.currentTranslateX) > swipeThreshold) {
+            const direction = this.currentTranslateX > 0 ? 1 : -1;
             gsap.to(topCard, {
-                x: direction * window.innerWidth,
-                rotation: direction * 45,
-                duration: 0.5,
-                ease: 'power2.out',
+                x: direction * (window.innerWidth + 200),
+                rotation: direction * 30,
+                duration: 0.4,
+                ease: 'power2.in',
                 onComplete: () => {
-                    // Remove the dismissed card and advance to next card
                     this.removeDismissedCard(topCard);
-                    if (this.onCardAdvance) {
-                        this.onCardAdvance();
-                    }
+                    if (this.onCardAdvance) this.onCardAdvance();
                 }
             });
         } else {
-            // Return card to original position
-            gsap.to(topCard, {
-                x: 0,
-                rotation: 0,
-                duration: 0.3,
-                ease: 'power2.out'
-            });
+            // Snap back — top card's natural stack y is 0
+            gsap.to(topCard, { x: 0, y: 0, rotation: 0, duration: 0.4, ease: 'back.out(1.7)' });
         }
     }
 
@@ -201,29 +193,18 @@ export class Holocard {
     }
 
     /**
-     * Update card positions in the stack
-     * Cards stack from bottom to top: bottom card peeks out, top card is fully visible
-     * Array order: [0]=top card (largest), [N]=bottom card (smallest)
+     * Update card positions in the stack (desktop only).
+     * index 0 = top card (full scale, y=0)
+     * index N = back card (scaled down, offset down)
      */
     updateCardPositions() {
+        if (window.innerWidth <= 1024) return; // Mobile uses scroll-snap, not stack transforms
         const cardCount = this.cards.length;
-
         this.cards.forEach((card, index) => {
-            // Create inverted stack: bottom cards bigger, upper cards smaller
-            // index 0 = bottom (largest), index N = top (smallest)
-            const stackOffset = index * 25 - (cardCount - 1) * 12.5; // Higher index = higher position
-            const scale = 1 - (index * 0.08); // Higher index = smaller scale
-            const zIndex = cardCount - index; // Higher index = lower z-index
-
-            // Set z-index immediately for proper stacking
-            card.style.zIndex = zIndex;
-
-            gsap.to(card, {
-                y: stackOffset,
-                scale: Math.max(scale, 0.7),
-                duration: 0.3,
-                ease: 'power2.out'
-            });
+            const stackY = index * 14;
+            const scale = Math.max(1 - index * 0.06, 0.82);
+            card.style.zIndex = cardCount - index;
+            gsap.to(card, { y: stackY, scale, duration: 0.4, ease: 'power2.out' });
         });
     }
 
@@ -277,6 +258,12 @@ export class Holocard {
 
         this.currentPlanet = data.id;
         this.currentCardIndex = 0;
+        this.currentStartIndex = 0;
+
+        // Desktop: use GSAP xPercent/yPercent for centering so x/y/scale tweens compose correctly
+        if (window.innerWidth > 1024) {
+            this.cards.forEach(card => gsap.set(card, { xPercent: -50, yPercent: -50 }));
+        }
 
         // Initialize 3D Preview in the first card's circle (if it has one)
         requestAnimationFrame(() => {
@@ -673,14 +660,13 @@ export class Holocard {
     }
 
     /**
-     * Show cards in stack (desktop) or single card (mobile) starting from the specific card index
-     * cardIndex=0: Hide all cards (planet view)
-     * cardIndex=1: Show cards 0,1,2 in stack (card 1 on top) [desktop] OR show card 0 [mobile]
-     * cardIndex=2: Show cards 1,2,3 in stack (card 2 on top) [desktop] OR show card 1 [mobile]
-     * cardIndex=3: Show cards 2,3 in stack (card 3 on top) [desktop] OR show card 2 [mobile]
+     * Show the card for the given state index.
+     * cardIndex=0: planet view — hide wrapper
+     * cardIndex=1: show card 0 on top of stack
+     * cardIndex=2: show card 1 on top of stack (card 0 fades out)
+     * cardIndex=3: show card 2 on top of stack
      */
     showSpecificCard(cardIndex) {
-        // card=0 means planet view - hide all cards
         if (cardIndex === 0) {
             this.wrapper.classList.add('hidden');
             this.wrapper.classList.remove('visible');
@@ -688,182 +674,63 @@ export class Holocard {
             return;
         }
 
-        // Make wrapper visible if not already
-        if (!this.isVisible) {
+        const wasVisible = this.isVisible;
+        if (!wasVisible) {
             this.wrapper.classList.remove('hidden');
             this.wrapper.classList.add('visible');
             this.isVisible = true;
         }
 
         const isMobile = window.innerWidth <= 1024;
+        const startIndex = cardIndex - 1;
+        this.currentStartIndex = startIndex;
 
         if (isMobile) {
-            // Mobile: Add subtle fly-in animation for the appearing card
-            const targetCardIndex = cardIndex - 1; // cardIndex 1 = card 0, etc.
+            // Mobile: scroll-snap handles layout; just scroll to the target card.
+            // All cards stay at opacity 1 — native scroll handles which one is visible.
+            this.cards.forEach(card => { card.style.opacity = '1'; });
 
-            // First, hide all cards instantly
-            this.cards.forEach((card) => {
-                gsap.set(card, { opacity: 0 });
-            });
-
-            // Then animate the target card in with cosmic fly-in effect
-            if (this.cards[targetCardIndex]) {
-                const card = this.cards[targetCardIndex];
-
-                // Set initial cosmic warp state
-                gsap.set(card, {
-                    x: 80,
-                    y: -40,
-                    rotation: -15,
-                    scale: 0.5,
-                    opacity: 0,
-                    filter: 'blur(12px) brightness(1.8) contrast(1.4)',
-                    transformOrigin: 'center center'
-                });
-
-                // Animate in with dramatic cosmic effect
-                gsap.to(card, {
-                    x: 0,
-                    y: 0,
-                    rotation: 0,
-                    scale: 1,
-                    opacity: 1,
-                    filter: 'blur(0px) brightness(1) contrast(1)',
-                    duration: 1.5, // Much slower for mobile too
-                    ease: 'power2.out', // Smooth cosmic easing
-                    onStart: () => {
-                        // Add cosmic glow during animation
-                        card.style.boxShadow = '0 0 60px rgba(0, 243, 255, 0.4), 0 0 120px rgba(255, 170, 0, 0.3), inset 0 0 40px rgba(0, 243, 255, 0.1)';
-                    },
-                    onComplete: () => {
-                        // Remove glow and scroll to card
-                        card.style.boxShadow = '';
-                        setTimeout(() => {
-                            card.scrollIntoView({
-                                behavior: 'smooth',
-                                block: 'start'
-                            });
-                        }, 300);
-                    }
+            const targetCard = this.cards[startIndex];
+            if (targetCard) {
+                requestAnimationFrame(() => {
+                    this.stackContainer.scrollTo({
+                        top: targetCard.offsetTop,
+                        behavior: wasVisible ? 'smooth' : 'instant'
+                    });
                 });
             }
         } else {
-            // Desktop: Show cards in stack with fly-in animation
-            const startIndex = cardIndex - 1;
+            // Desktop: combined fly-in + stack positions in a single tween per card.
+            // Killing tweens first prevents competing animations on the same properties.
+            const visibleCount = this.cards.length - startIndex;
 
-            // Hide cards that should not be visible with cosmic dissolve
-            this.cards.forEach((card, index) => {
-                if (index < startIndex) {
-                    gsap.to(card, {
-                        opacity: 0,
-                        scale: 0.8,
-                        y: -20,
-                        filter: 'blur(8px) brightness(0.5)',
-                        duration: 0.8, // Slower dissolve
-                        ease: 'power2.in',
-                        onStart: () => {
-                            // Add dissolving effect
-                            card.style.boxShadow = '0 0 20px rgba(255, 0, 0, 0.3)';
-                        },
-                        onComplete: () => {
-                            card.style.boxShadow = '';
-                        }
-                    });
+            this.cards.forEach((card, i) => {
+                gsap.killTweensOf(card);
+
+                if (i < startIndex) {
+                    // Dissolve cards that are "done"
+                    gsap.to(card, { opacity: 0, y: -16, scale: 0.9, duration: 0.3, ease: 'power2.in' });
                 } else {
-                    // Show cards in stack with cosmic fly-in animation
-                    const cosmicAnimations = [
-                        // Card 0: Warp in from left with quantum drift
+                    const localIndex = i - startIndex;
+                    const stackY = localIndex * 14;
+                    const stackScale = Math.max(1 - localIndex * 0.06, 0.82);
+                    card.style.zIndex = visibleCount - localIndex;
+
+                    // Single fromTo: fly-in AND stack position in one tween — no conflicts
+                    gsap.fromTo(card,
+                        { opacity: 0, y: stackY - 35, scale: stackScale * 0.88 },
                         {
-                            startX: -120,
-                            startY: -30,
-                            startRotation: -25,
-                            startScale: 0.7,
-                            warpEffect: { filter: 'blur(8px) brightness(1.5)' }
-                        },
-                        // Card 1: Materialize from right with energy surge
-                        {
-                            startX: 120,
-                            startY: 30,
-                            startRotation: 25,
-                            startScale: 0.8,
-                            warpEffect: { filter: 'blur(6px) hue-rotate(180deg)' }
-                        },
-                        // Card 2: Emerge from below with gravitational pull
-                        {
-                            startX: 0,
-                            startY: 150,
-                            startRotation: 0,
-                            startScale: 0.6,
-                            warpEffect: { filter: 'blur(10px) contrast(1.3)' }
+                            opacity: 1,
+                            y: stackY,
+                            scale: stackScale,
+                            duration: 0.55,
+                            delay: localIndex * 0.08,
+                            ease: 'power3.out'
                         }
-                    ];
-
-                    const animIndex = index - startIndex;
-                    const cosmicAnim = cosmicAnimations[animIndex] || cosmicAnimations[0];
-
-                    // Set initial cosmic warp state
-                    gsap.set(card, {
-                        opacity: 0,
-                        x: cosmicAnim.startX,
-                        y: cosmicAnim.startY,
-                        rotation: cosmicAnim.startRotation,
-                        scale: cosmicAnim.startScale,
-                        filter: cosmicAnim.warpEffect.filter,
-                        transformOrigin: 'center center'
-                    });
-
-                    // Animate to normal state with cosmic easing
-                    gsap.to(card, {
-                        opacity: 1,
-                        x: 0,
-                        y: 0,
-                        rotation: 0,
-                        scale: 1,
-                        filter: 'blur(0px) brightness(1) contrast(1) hue-rotate(0deg)',
-                        duration: 1.8, // Much slower and more visible
-                        delay: animIndex * 0.4, // More staggered for dramatic effect
-                        ease: 'power2.out', // Smoother, more cosmic easing
-                        onStart: () => {
-                            // Add subtle glow effect during animation
-                            card.style.boxShadow = '0 0 40px rgba(0, 243, 255, 0.3), 0 0 80px rgba(255, 170, 0, 0.2)';
-                        },
-                        onComplete: () => {
-                            // Remove glow after animation
-                            card.style.boxShadow = '';
-                        }
-                    });
+                    );
                 }
             });
-
-            // Update the stack positions for the visible cards
-            const visibleCards = this.cards.slice(startIndex);
-            this.updateStackPositions(visibleCards, startIndex);
         }
-    }
-
-    /**
-     * Update stack positions for a subset of cards
-     */
-    updateStackPositions(cardsToPosition, offsetIndex = 0) {
-        const cardCount = cardsToPosition.length;
-
-        cardsToPosition.forEach((card, localIndex) => {
-            const globalIndex = offsetIndex + localIndex;
-            // Create inverted stack: bottom cards bigger, upper cards smaller
-            const stackOffset = localIndex * 25 - (cardCount - 1) * 12.5; // Higher localIndex = higher position
-            const scale = 1 - (localIndex * 0.08); // Higher localIndex = smaller scale
-            const zIndex = cardCount - localIndex; // Higher localIndex = lower z-index
-
-            // Set z-index immediately for proper stacking
-            card.style.zIndex = zIndex;
-
-            gsap.to(card, {
-                y: stackOffset,
-                scale: Math.max(scale, 0.7),
-                duration: 0.3,
-                ease: 'power2.out'
-            });
-        });
     }
 
     /**
