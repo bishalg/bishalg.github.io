@@ -154,23 +154,68 @@ body {
 }
 
 /* ---------------------------------------------------------
-   SCROLL LAYOUT
+   SCROLL LAYOUT - PAGED SNAP SCROLL
    --------------------------------------------------------- */
+html {
+    scroll-behavior: smooth;
+}
+
 .scroll-container {
     position: relative;
     z-index: 10;
-    pointer-events: none;
-    /* Let clicks pass through to canvas if needed, but we enable pointer-events on cards */
+    height: 100vh;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    /* Smooth touch on iOS */
 }
 
+/* Hide scrollbar for cleaner look, but keep functionality */
+.scroll-container::-webkit-scrollbar {
+    width: 0;
+    background: transparent;
+}
+
+.page {
+    height: 100vh;
+    width: 100%;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: auto;
+}
+
+/* Planet landing pages (card 0) - transparent to show 3D */
+.page--planet {
+    background: transparent;
+}
+
+/* Card pages - semi-transparent for readability */
+.page--card {
+    background: linear-gradient(135deg, rgba(0, 5, 15, 0.85) 0%, rgba(0, 0, 0, 0.7) 100%);
+}
+
+.page--welcome {
+    background: transparent;
+}
+
+.page--end {
+    background: rgba(10, 5, 0, 0.9);
+}
+
+/* Legacy .scene support (if any old references remain) */
 .scene {
-    height: 150vh;
-    /* Extra height for scroll duration */
+    height: 100vh;
     position: relative;
     display: flex;
     justify-content: center;
     align-items: center;
 }
+
 
 /* ---------------------------------------------------------
    HUD FRAMEWORK
@@ -592,8 +637,22 @@ body {
 
 .holocard-wrapper.hidden {
     opacity: 0;
-    pointer-events: none;
     visibility: hidden;
+}
+
+/* Scroll Pass-through: Make default container ignore pointers */
+.holocard-wrapper .holocard-stack,
+.holo-card,
+.holo-card .card-content {
+    pointer-events: none !important;
+}
+
+/* Allow interaction with specific elements */
+.holo-card a,
+.holo-card button,
+.holocard-next-btn {
+    pointer-events: auto !important;
+    cursor: pointer;
 }
 
 .holocard-wrapper.hidden .holocard-content {
@@ -626,7 +685,8 @@ body {
     position: relative;
     width: 100%;
     height: 100%;
-    pointer-events: auto;
+    pointer-events: none;
+    /* Changed from auto to none for scroll pass-through */
     display: flex;
     justify-content: center;
     align-items: center;
@@ -636,7 +696,7 @@ body {
     position: absolute;
     top: 50%;
     left: 50%;
-    /* Centering via GSAP xPercent/yPercent — no CSS transform to avoid conflicts */
+    transform: translate(-50%, -50%);
     background: rgba(10, 15, 30, 0.85);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 16px;
@@ -648,7 +708,7 @@ body {
     overflow: hidden;
     backdrop-filter: blur(6px);
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
-    /* Transitions handled by GSAP, not CSS */
+    /* Transitions handled by GSAP — no CSS transition on transform */
     will-change: transform;
     cursor: grab;
     border-image: linear-gradient(45deg, rgba(0, 243, 255, 0.3), rgba(255, 170, 0, 0.3)) 1;
@@ -687,8 +747,39 @@ body {
 
 .holo-card .card-content {
     flex: 1;
-    overflow-y: auto;
-    padding-right: 8px;
+    overflow: hidden;
+    /* Prevent internal scrolling */
+    padding-right: 0;
+    /* Remove padding reserved for scrollbar */
+    display: flex;
+    flex-direction: column;
+}
+
+.holocard-next-btn {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: rgba(0, 255, 255, 0.1);
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    color: cyan;
+    font-size: 1.5rem;
+    cursor: pointer;
+    z-index: 1000;
+    backdrop-filter: blur(5px);
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.1);
+}
+
+.holocard-next-btn:hover {
+    background: rgba(0, 255, 255, 0.2);
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+    transform: scale(1.1);
 }
 
 .holo-card .card-content::-webkit-scrollbar {
@@ -719,7 +810,8 @@ body {
     padding-bottom: 10px;
 }
 
-.project-highlight, .podcast-highlight {
+.project-highlight,
+.podcast-highlight {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 8px;
@@ -728,7 +820,8 @@ body {
     transition: all 0.3s ease;
 }
 
-.project-highlight:hover, .podcast-highlight:hover {
+.project-highlight:hover,
+.podcast-highlight:hover {
     background: rgba(255, 255, 255, 0.08);
     border-color: var(--accent-color);
     transform: translateX(5px);
@@ -1055,13 +1148,13 @@ body {
         align-items: center;
         padding: 100px 20px 120px 20px;
         box-sizing: border-box;
-        /* No transform override — GSAP only animates opacity on mobile */
+        /* Strategy only animates opacity on mobile — no transform override needed */
         margin: 0;
         border-radius: 0;
         box-shadow: none;
         backdrop-filter: none;
         background: rgba(0, 0, 5, 0.95);
-        /* GPU layer hint for scroll performance */
+        /* Promote each card to its own GPU layer for smooth scroll-snap compositing */
         transform: translateZ(0);
     }
 
@@ -1081,8 +1174,11 @@ body {
         width: 100%;
         max-width: 400px;
         flex: 1;
-        overflow-y: auto;
+        overflow: hidden;
+        /* Prevent internal scrolling */
         padding: 0 10px;
+        display: flex;
+        flex-direction: column;
     }
 
     .holocard-next-btn {
@@ -1118,11 +1214,11 @@ body {
    --------------------------------------------------------- */
 .holocard-next-btn {
     position: fixed;
-    bottom: 20px;
+    bottom: 2rem;
     left: 50%;
     transform: translateX(-50%);
-    width: 50px;
-    height: 50px;
+    width: 60px;
+    height: 60px;
     border-radius: 50%;
     background: rgba(10, 15, 30, 0.8);
     border: 2px solid var(--color-cyan);
@@ -1136,10 +1232,9 @@ body {
     justify-content: center;
     transition: all 0.3s ease;
     backdrop-filter: blur(8px);
-    z-index: 200;
-    /* Hidden by default, shown after first scroll/click */
-    opacity: 0;
-    pointer-events: none;
+    z-index: 1000;
+    opacity: 1;
+    box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
 }
 
 .holocard-next-btn.visible {
@@ -1150,8 +1245,8 @@ body {
 .holocard-next-btn:hover {
     background: var(--color-cyan);
     color: #000;
-    box-shadow: 0 0 20px var(--color-cyan);
-    transform: translateX(-50%) scale(1.1);
+    box-shadow: 0 0 25px var(--color-cyan);
+    transform: scale(1.1);
 }
 
 .holocard-next-btn:focus {
@@ -1160,7 +1255,7 @@ body {
 }
 
 .holocard-next-btn:active {
-    transform: translateX(-50%) scale(0.95);
+    transform: scale(0.95);
 }
 
 .holocard-next-btn.disabled {
@@ -1168,7 +1263,6 @@ body {
     pointer-events: none;
     cursor: default;
     filter: grayscale(1);
-    transform: translateX(-50%) scale(0.95);
 }
 
 .scroll-top-btn {
