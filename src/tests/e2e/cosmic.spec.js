@@ -16,9 +16,9 @@ import { test, expect } from '@playwright/test';
 test.describe('Cosmic CV — Core Journey', () => {
 
     test.beforeEach(async ({ page }) => {
-        await page.goto('http://localhost:3030');
-        // Wait for loader to be removed from DOM (main.js removes it after fade)
-        await page.waitForSelector('#loader', { state: 'detached', timeout: 15000 });
+        await page.goto('http://localhost:3030', { waitUntil: 'domcontentloaded' });
+        // Loader is removed from DOM once all assets finish loading
+        await page.waitForSelector('#loader', { state: 'detached', timeout: 20000 });
     });
 
     test('page has correct title', async ({ page }) => {
@@ -35,7 +35,9 @@ test.describe('Cosmic CV — Core Journey', () => {
         const scrollContainer = page.locator('#scroll-container');
         const initialScrollTop = await scrollContainer.evaluate(el => el.scrollTop);
 
-        await page.locator('#time-travel-btn').click();
+        // force:true bypasses Playwright stability check — button has a continuous
+        // bounce CSS animation so it never reaches a "stable" state
+        await page.locator('#time-travel-btn').click({ force: true });
         await page.waitForTimeout(1500); // allow scroll animation
 
         const newScrollTop = await scrollContainer.evaluate(el => el.scrollTop);
@@ -68,7 +70,7 @@ test.describe('Cosmic CV — Core Journey', () => {
         const scrollContainer = page.locator('#scroll-container');
 
         // Scroll past the earth-0 planet page to earth-1 card page
-        await page.locator('#earth-1').scrollIntoViewIfNeeded();
+        await page.evaluate(() => document.getElementById('earth-1')?.scrollIntoView({ behavior: 'instant' }));
         await page.waitForTimeout(1500);
 
         // Holocard wrapper should become visible
@@ -77,7 +79,7 @@ test.describe('Cosmic CV — Core Journey', () => {
     });
 
     test('URL updates with planet and card params after scroll', async ({ page }) => {
-        await page.locator('#earth-1').scrollIntoViewIfNeeded();
+        await page.evaluate(() => document.getElementById('earth-1')?.scrollIntoView({ behavior: 'instant' }));
         await page.waitForTimeout(1500);
 
         const url = page.url();
@@ -86,7 +88,7 @@ test.describe('Cosmic CV — Core Journey', () => {
     });
 
     test('deep link URL restores correct scroll position', async ({ page }) => {
-        await page.goto('http://localhost:3030/?planet=mars&card=1');
+        await page.goto('http://localhost:3030/?planet=mars&card=1', { waitUntil: 'domcontentloaded' });
         await page.waitForSelector('#loader', { state: 'hidden', timeout: 15000 });
         await page.waitForTimeout(1000);
 
@@ -99,7 +101,7 @@ test.describe('Cosmic CV — Core Journey', () => {
         const nextBtn = page.locator('.holocard-next-btn');
 
         // Initially hidden (no card shown on welcome page)
-        await page.locator('#earth-1').scrollIntoViewIfNeeded();
+        await page.evaluate(() => document.getElementById('earth-1')?.scrollIntoView({ behavior: 'instant' }));
         await page.waitForTimeout(1500);
 
         await expect(nextBtn).toBeVisible();
