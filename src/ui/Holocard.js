@@ -1,6 +1,5 @@
 import { solarSystemData } from '../data/solarSystemData.js';
 import { createStatGrid, createProfessionalContent, createPersonalNarrative, createPanelHeader } from './HUDComponents.js';
-import { PlanetPreview } from './PlanetPreview.js';
 import { SimpleFadeStrategy } from './animations/SimpleFadeStrategy.js';
 
 // GSAP is loaded globally
@@ -47,9 +46,6 @@ export class Holocard {
         // Callback for scroll navigation (set from main.js)
         this.onNavigateToNext = null;
         this.isNavigating = false;
-
-        // 3D Planet Preview
-        this.planetPreview = new PlanetPreview();
 
         // Register GSAP plugins
         gsap.registerPlugin(ScrollTrigger);
@@ -224,9 +220,6 @@ export class Holocard {
             this.currentPlanet = null;
             this.currentCardIndex = 0;
 
-            if (this.planetPreview) {
-                this.planetPreview.stop();
-            }
         }, 300);
     }
 
@@ -241,9 +234,6 @@ export class Holocard {
      * Clean up animations and resources
      */
     destroy() {
-        if (this.planetPreview) {
-            this.planetPreview.dispose();
-        }
         if (this.wrapper && this.wrapper.parentNode) {
             this.wrapper.parentNode.removeChild(this.wrapper);
         }

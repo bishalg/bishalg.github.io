@@ -1,11 +1,12 @@
 // Helper functions to generate HTML for the Holocard panels
 
 export function createPanelHeader(data) {
+    const sysId = data?.id ? `SYSTEM: ${data.id.toUpperCase()}` : '';
     return `
         <div class="panel-header">
-            <h3 class="panel-sys">SYSTEM: ${data.id.toUpperCase()}</h3>
-            <h2 class="panel-title">${data.title}</h2>
-            <p class="panel-subtitle">${data.subtitle}</p>
+            ${sysId ? `<h3 class="panel-sys">${sysId}</h3>` : ''}
+            ${data?.title ? `<h2 class="panel-title">${data.title}</h2>` : ''}
+            ${data?.subtitle ? `<p class="panel-subtitle">${data.subtitle}</p>` : ''}
         </div>
     `;
 }
@@ -15,6 +16,7 @@ export function createPanelHeader(data) {
 export function createStatGrid(data) {
     const stats = data.stats || [];
     const accent = data.accentColor || '#00f3ff';
+    const title = data.title || data.id || '';
     return `
         <div class="stats-card-layout">
             <div class="stats-planet-circle" aria-hidden="true">
@@ -22,7 +24,7 @@ export function createStatGrid(data) {
                     background: radial-gradient(circle at 38% 32%, ${accent}dd, ${accent}, ${accent}55);
                     box-shadow: 0 0 30px ${accent}66, 0 0 8px ${accent}44 inset;
                 "></div>
-                <div class="stats-planet-name">${data.title}</div>
+                <div class="stats-planet-name">${title}</div>
             </div>
             <div class="stat-grid">
                 ${stats.map(stat => `
@@ -38,13 +40,16 @@ export function createStatGrid(data) {
 
 // Card 2: Personal — first sentence of narrative + short quote
 export function createPersonalNarrative(data) {
-    // Use only the first sentence to keep within card height
-    const firstSentence = (data.narrative || '').split(/\.\s+/)[0].trim() + '.';
-    const quote = (data.quote || '').substring(0, 120);
+    const rawSentence = (data.narrative || '').split(/\.\s+/)[0].trim();
+    const firstSentence = rawSentence
+        ? (rawSentence.endsWith('.') ? rawSentence : rawSentence + '.')
+        : '';
+    const rawQuote = data.quote || '';
+    const quote = rawQuote.length > 120 ? rawQuote.substring(0, 117) + '...' : rawQuote;
     return `
         <div class="personal-card-layout">
-            <p class="personal-narrative-text">${firstSentence}</p>
-            <blockquote class="holo-quote">${quote}</blockquote>
+            ${firstSentence ? `<p class="personal-narrative-text">${firstSentence}</p>` : ''}
+            ${quote ? `<blockquote class="holo-quote">${quote}</blockquote>` : ''}
         </div>
     `;
 }
@@ -53,11 +58,14 @@ export function createPersonalNarrative(data) {
 export function createProfessionalContent(professional) {
     if (!professional) return '';
     const skills = (professional.skills || []).slice(0, 4);
-    const summary = (professional.summary || '').split(/\.\s+/)[0].trim() + '.';
+    const rawSummary = (professional.summary || '').split(/\.\s+/)[0].trim();
+    const summary = rawSummary
+        ? (rawSummary.endsWith('.') ? rawSummary : rawSummary + '.')
+        : '';
     return `
         <div class="professional-card-layout">
-            <div class="prof-role">${professional.title}</div>
-            <p class="prof-summary-text">${summary}</p>
+            ${professional.title ? `<div class="prof-role">${professional.title}</div>` : ''}
+            ${summary ? `<p class="prof-summary-text">${summary}</p>` : ''}
             ${skills.length ? `
                 <div class="skill-tags">
                     ${skills.map(s => `<span>${s}</span>`).join('')}
