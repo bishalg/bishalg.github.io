@@ -124,29 +124,6 @@ export class Holocard {
         this.currentPlanet = data.id;
         this.currentCardIndex = 0;
 
-        // Initialize 3D Preview in the first card's circle (if it has one)
-        requestAnimationFrame(() => {
-            const circleContainer = this.cards[0]?.querySelector('.holo-circle');
-            if (circleContainer) {
-                // Clear any existing content
-                circleContainer.innerHTML = '';
-
-                // Improved detection for fallback scenarios
-                const shouldUseFallback = this.shouldUseFallback();
-
-                if (shouldUseFallback) {
-                    this.createFallbackCircle(circleContainer, data);
-                } else {
-                    // WebGL available, try 3D preview
-                    try {
-                        this.planetPreview.mount(circleContainer, data.id);
-                    } catch (error) {
-                        this.createFallbackCircle(circleContainer, data);
-                    }
-                }
-            }
-        });
-
         // Hide the wrapper/backdrop for clean Card 0 view initially
         this.wrapper.classList.remove('visible');
         this.wrapper.classList.add('hidden');
@@ -188,54 +165,6 @@ export class Holocard {
 
         return contents;
     }
-
-    /**
-     * Determine if we should use fallback instead of 3D preview
-     */
-    shouldUseFallback() {
-        // Check for mobile devices
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-            window.innerWidth <= 1024 ||
-            window.innerHeight <= 768;
-
-        const isDevEnv = navigator.userAgent.includes('Cursor') ||
-            navigator.userAgent.includes('Electron') ||
-            window.location.hostname === 'localhost' ||
-            window.location.hostname === '127.0.0.1';
-
-        const isLowPerformance = navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2;
-
-        let hasWebGL = false;
-        try {
-            const canvas = document.createElement('canvas');
-            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-            hasWebGL = !!gl;
-        } catch (e) {
-            hasWebGL = false;
-        }
-
-        return isMobile || isDevEnv || isLowPerformance || !hasWebGL;
-    }
-
-    /**
-     * Create a fallback circle when 3D preview is not available
-     */
-    createFallbackCircle(container, data) {
-        import('../config.js').then(({ CONFIG }) => {
-            const planetConfig = CONFIG.planets[data.id];
-            const planetColor = planetConfig ? planetConfig.color : data.accentColor;
-            const circle = document.createElement('div');
-            circle.className = 'fallback-circle';
-            const colorHex = '#' + planetColor.toString(16).padStart(6, '0');
-            circle.innerHTML = `
-                <div class="fallback-sphere" style="background: ${colorHex}; box-shadow: 0 0 30px ${colorHex}40;"></div>
-                <div class="fallback-circle-content"><div class="fallback-circle-label">${data.title}</div></div>
-            `;
-            container.appendChild(circle);
-        });
-    }
-
-    // (Helper color methods removed for brevity - can be imported or re-added if strictly needed by fallback)
 
     /**
      * Create a single card element

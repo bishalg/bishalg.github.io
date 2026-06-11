@@ -53,7 +53,13 @@ test.describe('Animation Smoothness & Correctness', () => {
     });
 
     // ── 3. CSS centering not clobbered by GSAP ────────────────────────────
+    // Mobile uses position:relative full-screen layout, not transform-based centering,
+    // so this desktop-specific check is skipped on narrow viewports.
     test('cards remain centered (transform not overwritten by GSAP)', async ({ page }) => {
+        const viewport = page.viewportSize();
+        const isMobile = viewport && viewport.width < 1025;
+        test.skip(!!isMobile, 'Mobile uses position:relative full-screen layout, not transform centering');
+
         await scrollTo(page, 'earth-1');
         await page.waitForSelector('.holocard-wrapper.visible', { timeout: 5000 });
         await page.waitForTimeout(600);
