@@ -707,7 +707,7 @@ html {
     backdrop-filter: blur(6px);
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
     /* Transitions handled by GSAP — no CSS transition on transform */
-    will-change: transform;
+    will-change: opacity;
     border-image: linear-gradient(45deg, rgba(0, 243, 255, 0.3), rgba(255, 170, 0, 0.3)) 1;
 }
 
@@ -747,36 +747,11 @@ html {
 .holo-card .card-content {
     flex: 1;
     min-height: 0;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     display: flex;
     flex-direction: column;
-}
-
-.holocard-next-btn {
-    position: fixed;
-    bottom: 2rem;
-    right: 2rem;
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    background: rgba(0, 255, 255, 0.1);
-    border: 1px solid rgba(0, 255, 255, 0.3);
-    color: cyan;
-    font-size: 1.5rem;
-    cursor: pointer;
-    z-index: 1000;
-    backdrop-filter: blur(5px);
-    transition: all 0.3s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 0 10px rgba(0, 255, 255, 0.1);
-}
-
-.holocard-next-btn:hover {
-    background: rgba(0, 255, 255, 0.2);
-    box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
-    transform: scale(1.1);
 }
 
 .holo-card .card-content::-webkit-scrollbar {
@@ -1116,6 +1091,7 @@ html {
 }
 
 @media (max-width: 1024px) {
+    /* Cards overlay + fade with page snap — no nested scroll stack */
     .holocard-wrapper {
         position: fixed;
         top: 0;
@@ -1127,40 +1103,34 @@ html {
     }
 
     .holocard-stack {
-        width: 100vw;
-        height: 100vh;
-        overflow-y: scroll;
-        /* scroll-behavior controlled by JS for precise snap+smooth control */
-        scroll-snap-type: y mandatory;
-        -webkit-overflow-scrolling: touch;
-        overscroll-behavior: contain;
-        scrollbar-width: none;
-        -ms-overflow-style: none;
-    }
-
-    .holocard-stack::-webkit-scrollbar {
-        display: none;
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        display: flex;
+        justify-content: center;
+        align-items: center;
     }
 
     .holo-card {
-        position: relative;
-        width: 100vw;
-        height: 100vh;
-        min-height: 100vh;
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
         margin: 0;
-        scroll-snap-align: start;
-        scroll-snap-stop: always;
         display: flex;
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        padding: 80px 24px 100px;
+        padding: max(64px, env(safe-area-inset-top)) 20px max(96px, env(safe-area-inset-bottom));
         box-sizing: border-box;
         border-radius: 0;
         box-shadow: none;
-        backdrop-filter: none;
-        background: rgba(0, 0, 5, 0.95);
+        backdrop-filter: blur(8px);
+        background: rgba(0, 0, 5, 0.92);
+        /* Avoid translate(-50%,-50%) so GSAP autoAlpha never fights centering */
         transform: translateZ(0);
+        will-change: opacity;
     }
 
     .holo-card .card-header {
@@ -1181,37 +1151,44 @@ html {
         max-width: 420px;
         flex: 1;
         min-height: 0;
-        overflow: hidden;
-        padding: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        padding: 0 4px 8px;
         display: flex;
         flex-direction: column;
     }
 
     .holocard-next-btn {
         position: fixed;
-        bottom: 30px;
+        bottom: max(24px, env(safe-area-inset-bottom));
         left: 50%;
         transform: translateX(-50%);
         z-index: 1000;
-        width: 60px;
-        height: 60px;
-        font-size: 1.5rem;
+        width: 56px;
+        height: 56px;
+        font-size: 1.4rem;
         background: rgba(10, 15, 30, 0.95);
-        border: 2px solid var(--accent-color);
+        border: 2px solid var(--accent-color, var(--color-cyan));
         box-shadow: 0 0 20px rgba(0, 243, 255, 0.4);
         backdrop-filter: blur(10px);
-        /* Make it more prominent on mobile */
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        transition: all 0.3s ease;
+        transition: background 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
     }
 
-    .holocard-next-btn:hover {
-        transform: translateX(-50%) scale(1.1);
-        box-shadow: 0 0 30px rgba(0, 243, 255, 0.6);
+    .holocard-next-btn:hover,
+    .holocard-next-btn:focus-visible {
+        transform: translateX(-50%) scale(1.08);
+        box-shadow: 0 0 28px rgba(0, 243, 255, 0.55);
+    }
+
+    .holocard-next-btn:active {
+        transform: translateX(-50%) scale(0.96);
     }
 }
 
@@ -1252,7 +1229,7 @@ html {
     background: var(--color-cyan);
     color: #000;
     box-shadow: 0 0 25px var(--color-cyan);
-    transform: scale(1.1);
+    transform: translateX(-50%) scale(1.08);
 }
 
 .holocard-next-btn:focus {
@@ -1260,8 +1237,13 @@ html {
     box-shadow: 0 0 0 3px rgba(0, 243, 255, 0.3);
 }
 
+.holocard-next-btn:focus-visible {
+    outline: 2px solid var(--color-cyan);
+    outline-offset: 3px;
+}
+
 .holocard-next-btn:active {
-    transform: scale(0.95);
+    transform: translateX(-50%) scale(0.96);
 }
 
 .holocard-next-btn.disabled {
@@ -1316,5 +1298,32 @@ html {
     50% {
         opacity: 1;
         transform: scale(1.05);
+    }
+}
+
+/* Production: respect reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+
+    .scroll-container {
+        scroll-behavior: auto;
+    }
+
+    .loader-text,
+    .scroll-indicator,
+    .stats-planet-sphere {
+        animation: none;
+    }
+
+    .holocard-next-btn,
+    .scroll-top-btn,
+    .scroll-indicator,
+    .glass-panel,
+    .project-highlight,
+    .podcast-highlight,
+    .podcast-link {
+        transition: none;
     }
 }

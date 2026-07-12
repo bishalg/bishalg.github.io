@@ -18,10 +18,16 @@ test.describe('Paged Scroll & UI Refinements', () => {
     test('next button is fixed-positioned and always accessible', async ({ page }) => {
         const nextBtn = page.locator('.holocard-next-btn');
         await expect(nextBtn).toBeVisible();
-        // CSS: position:fixed; bottom:2rem; right:2rem (= 32px at default font size)
+        // Centered fixed CTA: position:fixed; left:50%; bottom ≥ 24px
         await expect(nextBtn).toHaveCSS('position', 'fixed');
-        await expect(nextBtn).toHaveCSS('bottom', '32px');
-        await expect(nextBtn).toHaveCSS('right', '32px');
+        const box = await nextBtn.boundingBox();
+        const viewport = page.viewportSize();
+        expect(box).toBeTruthy();
+        expect(viewport).toBeTruthy();
+        const btnCenterX = box.x + box.width / 2;
+        expect(Math.abs(btnCenterX - viewport.width / 2)).toBeLessThan(8);
+        expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+        expect(box.y).toBeGreaterThan(viewport.height * 0.5);
     });
 
     test('next button navigates to next page', async ({ page }) => {
@@ -40,7 +46,7 @@ test.describe('Paged Scroll & UI Refinements', () => {
         expect(page.url()).toContain('card=2');
     });
 
-    test('card content does not overflow its container', async ({ page }) => {
+    test('card content stays within viewport and is scrollable if needed', async ({ page }) => {
         await page.goto('http://localhost:3030/?planet=earth&card=1', { waitUntil: 'domcontentloaded' });
         await page.waitForSelector('#loader', { state: 'detached', timeout: 15000 });
         await page.waitForTimeout(1000);
@@ -48,11 +54,29 @@ test.describe('Paged Scroll & UI Refinements', () => {
         // Wait for the holocard wrapper to be in visible state
         await page.waitForSelector('.holocard-wrapper.visible', { timeout: 5000 });
 
-        // Check the first card's content overflow (all cards share the same CSS rule)
         const cardContent = page.locator('.holo-card .card-content').first();
-        // CSS requires overflow: hidden to prevent internal scrollbars
-        const overflow = await cardContent.evaluate(el => getComputedStyle(el).overflow);
-        expect(['hidden', 'hidden hidden']).toContain(overflow);
+        const metrics = await cardContent.evaluate(el => {
+            const s = getComputedStyle(el);
+            const rect = el.getBoundingClientRect();
+            return {
+                overflowX: s.overflowX,
+                overflowY: s.overflowY,
+                right: rect.right,
+                bottom: rect.bottom,
+                left: rect.left,
+                top: rect.top,
+                vw: window.innerWidth,
+                vh: window.innerHeight
+            };
+        });
+
+        // Horizontal overflow stays clipped; vertical may scroll for long content
+        expect(metrics.overflowX).toBe('hidden');
+        expect(['auto', 'hidden', 'scroll']).toContain(metrics.overflowY);
+        expect(metrics.left).toBeGreaterThanOrEqual(-1);
+        expect(metrics.right).toBeLessThanOrEqual(metrics.vw + 1);
+        expect(metrics.top).toBeGreaterThanOrEqual(-1);
+        expect(metrics.bottom).toBeLessThanOrEqual(metrics.vh + 1);
     });
 
     test('URL updates when scrolling to a planet page', async ({ page }) => {

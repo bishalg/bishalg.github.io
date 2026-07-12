@@ -52,29 +52,26 @@ test.describe('Animation Smoothness & Correctness', () => {
         expect(result).toHaveLength(0);
     });
 
-    // ── 3. CSS centering not clobbered by GSAP ────────────────────────────
-    // Mobile uses position:relative full-screen layout, not transform-based centering,
-    // so this desktop-specific check is skipped on narrow viewports.
-    test('cards remain centered (transform not overwritten by GSAP)', async ({ page }) => {
-        const viewport = page.viewportSize();
-        const isMobile = viewport && viewport.width < 1025;
-        test.skip(!!isMobile, 'Mobile uses position:relative full-screen layout, not transform centering');
-
+    // ── 3. Active card stays in viewport (desktop + mobile overlay stack) ─
+    test('active card remains in viewport (overlay stack, not nested scroll)', async ({ page }) => {
         await scrollTo(page, 'earth-1');
         await page.waitForSelector('.holocard-wrapper.visible', { timeout: 5000 });
         await page.waitForTimeout(600);
 
         const isCentered = await page.evaluate(() => {
             const wrapper = document.querySelector('.holocard-wrapper');
-            const card = document.querySelector('.holo-card');
-            if (!wrapper || !card) return false;
+            const cards = Array.from(document.querySelectorAll('.holo-card'));
+            const active = cards.find(c => parseFloat(window.getComputedStyle(c).opacity) > 0.9);
+            if (!wrapper || !active) return false;
             const wRect = wrapper.getBoundingClientRect();
-            const cRect = card.getBoundingClientRect();
-            const wCx = wRect.left + wRect.width / 2;
-            const wCy = wRect.top + wRect.height / 2;
-            const cCx = cRect.left + cRect.width / 2;
-            const cCy = cRect.top + cRect.height / 2;
-            return Math.abs(wCx - cCx) < 20 && Math.abs(wCy - cCy) < 40;
+            const cRect = active.getBoundingClientRect();
+            // Full-bleed mobile cards cover the wrapper; desktop cards are centered.
+            const overlaps =
+                cRect.bottom > wRect.top + 20 &&
+                cRect.top < wRect.bottom - 20 &&
+                cRect.right > wRect.left + 20 &&
+                cRect.left < wRect.right - 20;
+            return overlaps;
         });
 
         expect(isCentered).toBe(true);
