@@ -17,6 +17,13 @@ export class CosmicScene {
         // Camera target for smooth lookAt
         this.cameraTarget = new THREE.Vector3(0, 0, 0);
         this.currentLookAt = new THREE.Vector3(0, 0, 0);
+        // Reused temp vectors — avoid per-frame allocation (GC jank)
+        this._tmpWorld = new THREE.Vector3();
+        this._tmpProj = new THREE.Vector3();
+        this._planetKeys = Object.keys(CONFIG.planets);
+        this._labelFrame = 0;
+        this._hoverQueued = false;
+        this._hoverEvent = null;
 
         // Planet labels (HTML overlays)
         this.planetLabels = {};
@@ -79,7 +86,15 @@ export class CosmicScene {
         this.setupClickHandler();
         this.handleResize();
 
-        window.addEventListener('resize', () => this.handleResize());
+        let resizeQueued = false;
+        window.addEventListener('resize', () => {
+            if (resizeQueued) return;
+            resizeQueued = true;
+            requestAnimationFrame(() => {
+                resizeQueued = false;
+                this.handleResize();
+            });
+        });
     }
 
     /**
@@ -134,17 +149,25 @@ export class CosmicScene {
                 }
             });
 
-            // Change cursor on hover
+            // Change cursor on hover (throttled via rAF — raycast every mousemove janks)
             this.canvas.addEventListener('mousemove', (event) => {
-                const rect = this.canvas.getBoundingClientRect();
-                this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-                this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+                this._hoverEvent = event;
+                if (this._hoverQueued) return;
+                this._hoverQueued = true;
+                requestAnimationFrame(() => {
+                    this._hoverQueued = false;
+                    const e = this._hoverEvent;
+                    if (!e) return;
+                    const rect = this.canvas.getBoundingClientRect();
+                    this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                    this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
-                this.raycaster.setFromCamera(this.mouse, this.camera);
-                const planetMeshes = Object.values(this.planets);
-                const intersects = this.raycaster.intersectObjects(planetMeshes, false);
+                    this.raycaster.setFromCamera(this.mouse, this.camera);
+                    const planetMeshes = Object.values(this.planets);
+                    const intersects = this.raycaster.intersectObjects(planetMeshes, false);
 
-                this.canvas.style.cursor = intersects.length > 0 ? 'pointer' : 'default';
+                    this.canvas.style.cursor = intersects.length > 0 ? 'pointer' : 'default';
+                });
             });
         }
     }
@@ -190,20 +213,22 @@ export class CosmicScene {
         }
 
         try {
+            const isMobile = window.innerWidth < 768;
             this.renderer = new THREE.WebGLRenderer({
                 canvas: this.canvas,
-                antialias: true,
+                // MSAA is a major mobile GPU cost — off on small screens
+                antialias: !isMobile,
                 alpha: false,
-                powerPreference: "high-performance"
+                powerPreference: isMobile ? 'low-power' : 'high-performance'
             });
 
             this.renderer.setSize(window.innerWidth, window.innerHeight);
-            this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, CONFIG.maxPixelRatio));
+            this.applyPixelRatio();
             this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
             this.renderer.toneMappingExposure = 1.0;
             this.renderer.outputColorSpace = THREE.SRGBColorSpace; // r160+
-            this.renderer.shadowMap.enabled = true;
-            this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            // Shadows disabled for perf (was PCFSoft + 2048px PointLight — #1 jank source)
+            this.renderer.shadowMap.enabled = !!CONFIG.enableShadows;
 
             // Test render to ensure WebGL works
             this.renderer.render(this.scene, this.camera);
@@ -212,6 +237,15 @@ export class CosmicScene {
             this.useFallback = true;
             this.createFallbackPlanets();
         }
+    }
+
+    applyPixelRatio() {
+        if (!this.renderer) return;
+        const isMobile = window.innerWidth < 768;
+        const cap = isMobile
+            ? (CONFIG.maxPixelRatioMobile || 1.25)
+            : (CONFIG.maxPixelRatio || 1.5);
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, cap));
     }
 
     /**
@@ -329,12 +363,13 @@ export class CosmicScene {
 
         const material = new THREE.PointsMaterial({
             size: size,
-            sizeAttenuation: true,
+            sizeAttenuation: false,
             vertexColors: true,
             transparent: true,
             opacity: 0.8,
             map: this.createStarTexture(),
-            alphaTest: 0.1
+            alphaTest: 0.1,
+            depthWrite: false
         });
 
         this.stars = new THREE.Points(geometry, material);
@@ -370,12 +405,9 @@ export class CosmicScene {
         // Bright point light at 0,0,0 (The Sun)
         const sunLight = new THREE.PointLight(0xffddaa, 2.5, 0, 0);
         sunLight.position.set(0, 0, 0);
-        sunLight.castShadow = true;
-
-        // Improve shadow resolution
-        sunLight.shadow.mapSize.width = 2048;
-        sunLight.shadow.mapSize.height = 2048;
-        sunLight.shadow.bias = -0.0001;
+        // Shadow casting disabled for perf — PointLight shadows render the
+        // whole scene 6x per frame. Re-enable via CONFIG.enableShadows if needed.
+        sunLight.castShadow = false;
 
         this.scene.add(sunLight);
 
@@ -391,7 +423,8 @@ export class CosmicScene {
         // Group to handle position (revolution) vs Mesh (rotation)
         const orbitGroup = new THREE.Group();
 
-        const geometry = new THREE.SphereGeometry(radius, 64, 64);
+        const seg = CONFIG.planetSegments || 32;
+        const geometry = new THREE.SphereGeometry(radius, seg, seg);
 
         let material;
         // Sun uses MeshBasicMaterial to glow (self-illuminated)
@@ -410,11 +443,9 @@ export class CosmicScene {
 
         const mesh = new THREE.Mesh(geometry, material);
 
-        // Enable Shadows for realism
-        if (config.name !== 'sun') {
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-        }
+        // Shadows disabled globally for perf (see CONFIG.enableShadows).
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
 
         // Try to load texture asynchronously
         if (texture) {
@@ -433,8 +464,10 @@ export class CosmicScene {
             );
         }
 
-        // Tilt planet axis slightly
-        mesh.rotation.z = Math.PI / 12;
+        // True axial tilt (Venus 177.4° upside-down, Uranus 97.8° on its
+        // side). Falls back to the old stylized 15° when not configured.
+        const tiltDeg = typeof config.axialTilt === 'number' ? config.axialTilt : 15;
+        mesh.rotation.z = THREE.MathUtils.degToRad(tiltDeg);
 
         orbitGroup.add(mesh);
 
@@ -472,12 +505,18 @@ export class CosmicScene {
     }
 
     /**
-     * Update all planet label positions based on 3D world to screen projection
+     * Update all planet label positions based on 3D world to screen projection.
+     * Perf: uses reused vectors + translate3d (compositor-only) instead of
+     * left/top (layout). Called at most every 3rd frame from update().
      */
     updateLabelPositions() {
         if (!this.labelsContainer) return;
 
-        for (const [name, label] of Object.entries(this.planetLabels)) {
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+
+        for (const name of Object.keys(this.planetLabels)) {
+            const label = this.planetLabels[name];
             let screenX = 0;
             let screenY = 0;
 
@@ -490,52 +529,51 @@ export class CosmicScene {
                     screenY = rect.top - 20; // Position above the planet
                 } else {
                     // Default center position if planet not found
-                    screenX = window.innerWidth / 2;
-                    screenY = window.innerHeight / 2;
+                    screenX = vw / 2;
+                    screenY = vh / 2;
                 }
             } else {
                 // 3D mode: project 3D position to screen
                 const group = this.orbitGroups[name];
                 if (!group) continue;
 
-                // Get world position of planet
-                const worldPos = new THREE.Vector3();
-                group.getWorldPosition(worldPos);
+                // Get world position of planet (reused vector, no alloc)
+                group.getWorldPosition(this._tmpWorld);
 
                 // Add offset above the planet based on radius
                 const radius = parseFloat(label.dataset.radius) || 3;
-                worldPos.y += radius * 1.5;
+                this._tmpWorld.y += radius * 1.5;
 
-                // Project to screen coordinates
-                const screenPos = worldPos.clone().project(this.camera);
+                // Project to screen coordinates (reused vector)
+                this._tmpProj.copy(this._tmpWorld).project(this.camera);
 
                 // Check if behind camera
-                if (screenPos.z > 1) {
+                if (this._tmpProj.z > 1) {
                     label.style.display = 'none';
                     continue;
                 }
 
                 // Convert to CSS coordinates
-                screenX = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
-                screenY = (screenPos.y * -0.5 + 0.5) * window.innerHeight;
+                screenX = (this._tmpProj.x * 0.5 + 0.5) * vw;
+                screenY = (this._tmpProj.y * -0.5 + 0.5) * vh;
             }
 
             // Check if on screen
-            if (screenX < -50 || screenX > window.innerWidth + 50 ||
-                screenY < -50 || screenY > window.innerHeight + 50) {
-                label.style.display = 'none';
+            if (screenX < -50 || screenX > vw + 50 ||
+                screenY < -50 || screenY > vh + 50) {
+                if (label.style.display !== 'none') label.style.display = 'none';
                 continue;
             }
 
-            label.style.display = 'block';
-            label.style.left = `${screenX}px`;
-            label.style.top = `${screenY}px`;
+            if (label.style.display !== 'block') label.style.display = 'block';
+            // translate3d keeps this on the compositor thread (no layout)
+            label.style.transform = `translate3d(${screenX.toFixed(1)}px, ${screenY.toFixed(1)}px, 0) translate(-50%, -100%)`;
         }
     }
 
     createOrbitLine(radius, color = 0xffffff) {
         const points = [];
-        const segments = 128;
+        const segments = 96;
         for (let i = 0; i <= segments; i++) {
             const theta = (i / segments) * Math.PI * 2;
             points.push(new THREE.Vector3(Math.cos(theta) * radius, 0, Math.sin(theta) * radius));
@@ -553,7 +591,7 @@ export class CosmicScene {
     }
 
     createSaturnRing(planetMesh, planetRadius) {
-        const ringGeo = new THREE.RingGeometry(planetRadius * 1.4, planetRadius * 2.5, 64);
+        const ringGeo = new THREE.RingGeometry(planetRadius * 1.4, planetRadius * 2.5, 48);
         const pos = ringGeo.attributes.position;
         const v3 = new THREE.Vector3();
 
@@ -628,24 +666,26 @@ export class CosmicScene {
             this.createPlanetLabel(key, config.radius);
         });
 
-        // Handle Moon (attached to Earth Group)
+        // Handle Moon (attached to Earth Group). Skipped in 2D fallback mode,
+        // where no Earth group exists — the moon label above still works.
         const moonConfig = p.moon;
-        const moonResult = this.createPlanet(moonConfig);
-        this.planets.moon = moonResult.mesh;
-        this.orbitGroups.moon = moonResult.group; // This group will orbit Earth Group
-
-        // Create label for moon
         this.createPlanetLabel('moon', moonConfig.radius);
 
-        // Position moon relative to 0,0 (which will be Earth's center in its group)
-        moonResult.group.position.set(moonConfig.distance, 0, 0);
+        if (!this.useFallback && this.orbitGroups.earth) {
+            const moonResult = this.createPlanet(moonConfig);
+            this.planets.moon = moonResult.mesh;
+            this.orbitGroups.moon = moonResult.group; // This group will orbit Earth Group
 
-        // We add Moon Group to Earth GROUP, so it moves with Earth
-        this.orbitGroups.earth.add(moonResult.group);
+            // Position moon relative to 0,0 (which will be Earth's center in its group)
+            moonResult.group.position.set(moonConfig.distance, 0, 0);
+
+            // We add Moon Group to Earth GROUP, so it moves with Earth
+            this.orbitGroups.earth.add(moonResult.group);
+        }
     }
 
     addSunGlow() {
-        const glowGeo = new THREE.SphereGeometry(CONFIG.planets.sun.radius * 1.2, 32, 32);
+        const glowGeo = new THREE.SphereGeometry(CONFIG.planets.sun.radius * 1.2, 24, 24);
         const glowMat = new THREE.MeshBasicMaterial({
             color: 0xff8800,
             transparent: true,
@@ -655,7 +695,7 @@ export class CosmicScene {
         });
         this.planets.sun.add(new THREE.Mesh(glowGeo, glowMat));
 
-        const coronaGeo = new THREE.SphereGeometry(CONFIG.planets.sun.radius * 1.5, 32, 32);
+        const coronaGeo = new THREE.SphereGeometry(CONFIG.planets.sun.radius * 1.5, 24, 24);
         const coronaMat = new THREE.MeshBasicMaterial({
             color: 0xff4400,
             transparent: true,
@@ -667,7 +707,7 @@ export class CosmicScene {
     }
 
     addEarthAtmosphere() {
-        const atmosphereGeometry = new THREE.SphereGeometry(CONFIG.planets.earth.radius * 1.05, 64, 64);
+        const atmosphereGeometry = new THREE.SphereGeometry(CONFIG.planets.earth.radius * 1.05, 32, 32);
         const atmosphereMaterial = new THREE.MeshPhongMaterial({
             color: 0x4499ff,
             transparent: true,
@@ -681,18 +721,20 @@ export class CosmicScene {
     handleResize() {
         const width = window.innerWidth;
         const height = window.innerHeight;
+        if (!this.camera || !this.renderer) return;
         this.camera.fov = width < 768 ? CONFIG.camera.fov.mobile : CONFIG.camera.fov.desktop;
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(width, height);
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, CONFIG.maxPixelRatio));
+        this.applyPixelRatio();
     }
 
     update() {
-        const delta = this.clock.getDelta();
+        this.clock.getDelta();
 
-        // Orbit & Rotation Logic
-        Object.keys(CONFIG.planets).forEach(key => {
+        // Orbit & Rotation Logic (precomputed keys — no per-frame Object.keys alloc)
+        for (let i = 0; i < this._planetKeys.length; i++) {
+            const key = this._planetKeys[i];
             const config = CONFIG.planets[key];
             const mesh = this.planets[key];
             const group = this.orbitGroups[key];
@@ -730,18 +772,23 @@ export class CosmicScene {
                 // Note: Moon fallback positioning would be complex, so we'll skip it for now
             }
 
-            // Self Rotation (3D mode only)
+            // Self Rotation (3D mode only). Retrograde planets (Venus,
+            // Uranus) spin backwards — same sign convention as the card preview.
             if (!this.useFallback && mesh) {
-                mesh.rotation.y += config.rotationSpeed * this.simulationSpeed;
+                const dir = config.retrograde ? -1 : 1;
+                mesh.rotation.y += config.rotationSpeed * dir * this.simulationSpeed;
             }
-        });
+        }
 
         // Smooth camera follow
         this.currentLookAt.lerp(this.cameraTarget, 0.05);
         this.camera.lookAt(this.currentLookAt);
 
-        // Update planet label positions
-        this.updateLabelPositions();
+        // Labels every 3rd frame — DOM writes are the bottleneck
+        this._labelFrame = (this._labelFrame + 1) % 3;
+        if (this._labelFrame === 0) {
+            this.updateLabelPositions();
+        }
     }
 
     render() {

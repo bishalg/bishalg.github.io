@@ -6,6 +6,7 @@
 import { CosmicScene } from './core/CosmicScene.js';
 import { ScrollAnimator } from './core/ScrollAnimator.js';
 import { Holocard } from './ui/Holocard.js';
+import { ScrollRail } from './ui/ScrollRail.js';
 import { solarSystemData } from './data/solarSystemData.js';
 import * as THREE from 'three';
 
@@ -62,6 +63,7 @@ class App {
         // Initialize Components
         this.cosmicScene = new CosmicScene();
         this.holocard = new Holocard();
+        this.scrollRail = new ScrollRail();
 
         // Initialize Scroll Animator (now uses IntersectionObserver)
         this.scrollAnimator = new ScrollAnimator(
@@ -75,6 +77,7 @@ class App {
         this.setupHolocardNavigation();
         this.setupScrollTopButton();
         this.setupUrlStateSync();
+        this.setupScrollRailSync();
 
         // Timeout fallback
         setTimeout(() => {
@@ -122,6 +125,25 @@ class App {
     }
 
     /**
+     * Keep the quiet scroll rail in sync with the IntersectionObserver state.
+     * No extra observers / rAF — reuses the single ScrollAnimator callback.
+     */
+    setupScrollRailSync() {
+        if (!this.scrollRail || !this.scrollAnimator) return;
+        this.scrollAnimator.setOnStateChange(({ planet, card, pageId }) => {
+            if (pageId === 'welcome') {
+                this.scrollRail.setWelcome();
+                return;
+            }
+            if (pageId === 'end') {
+                this.scrollRail.setEnd();
+                return;
+            }
+            this.scrollRail.setActive(planet, card);
+        });
+    }
+
+    /**
      * Update URL with current state (no page reload)
      */
     updateUrlState(state) {
@@ -163,7 +185,6 @@ class App {
         params.set('card', targetCard);
 
         const newUrl = `${window.location.pathname}?${params.toString()}`;
-        console.log(`🔗 URL: ${newUrl}`);
         window.history.replaceState({}, '', newUrl);
     }
 
@@ -181,23 +202,30 @@ class App {
         btn.setAttribute('aria-label', 'Scroll to top');
         document.body.appendChild(btn);
 
-        btn.addEventListener('click', () => {
+        const scrollToTop = () => {
             const welcome = document.getElementById('welcome');
-            if (welcome) {
-                welcome.scrollIntoView({ behavior: 'smooth' });
-            }
-        });
+            if (!welcome) return;
+            const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            welcome.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth' });
+        };
+        btn.addEventListener('click', scrollToTop);
 
-        // Show button after scrolling past first page
+        // Show button after scrolling past first page (rAF-throttled scroll listener)
         const scrollContainer = document.getElementById('scroll-container');
         if (scrollContainer) {
+            let ticking = false;
             scrollContainer.addEventListener('scroll', () => {
-                if (scrollContainer.scrollTop > window.innerHeight) {
-                    btn.classList.add('visible');
-                } else {
-                    btn.classList.remove('visible');
-                }
-            });
+                if (ticking) return;
+                ticking = true;
+                requestAnimationFrame(() => {
+                    ticking = false;
+                    if (scrollContainer.scrollTop > window.innerHeight) {
+                        btn.classList.add('visible');
+                    } else {
+                        btn.classList.remove('visible');
+                    }
+                });
+            }, { passive: true });
         }
     }
 
@@ -211,9 +239,14 @@ class App {
     }
 
     start() {
+        // Single rAF loop owns both WebGL render and camera-target follow.
+        // (Previously ScrollAnimator ran a second loop — double overhead.)
         const animate = () => {
             requestAnimationFrame(animate);
             this.cosmicScene.render();
+            if (this.scrollAnimator && typeof this.scrollAnimator.tick === 'function') {
+                this.scrollAnimator.tick();
+            }
         };
         animate();
     }

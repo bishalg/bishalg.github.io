@@ -5,6 +5,8 @@
   "main": "src/main.js",
   "scripts": {
     "start": "serve -l 3030 .",
+    "lint": "for f in $(find src index.html -name '*.js' 2>/dev/null); do node --check \"$f\" || exit 1; done && echo LINT-OK",
+    "validate": "npm run lint && npm run test:unit",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
     "test": "npm run test:unit && npm run test:e2e",
@@ -22,7 +24,9 @@
     "@playwright/test": "^1.40.0",
     "@vitest/coverage-v8": "^4.0.18",
     "jest": "^29.7.0",
+    "jsdom": "^29.1.1",
     "serve": "^14.2.1",
+    "three": "^0.160.0",
     "vitest": "^4.0.17"
   },
   "jest": {

@@ -1,240 +1,227 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 
-// GSAP is loaded globally
-const gsap = window.gsap;
+/**
+ * PlanetPreview — tiny live 3D planet inside the card circle.
+ *
+ * Rewritten for perf + correctness (previous version created a second
+ * full-size renderer per mount, measured a hidden container as 0x0, and
+ * attached window touch/mouse listeners that fought page scroll):
+ * - ONE shared renderer, fixed 220px backing store (110 CSS px), reused
+ *   across all planets. No per-mount context, no layout measurement.
+ * - Real axial tilt per planet (Venus 177.4° upside-down, Uranus 97.8°
+ *   on its side) + retrograde spin sign for Venus / Uranus.
+ * - No drag interaction: display-only, so mobile scroll never fights it.
+ * - Renders only while the stats card is the active card; paused otherwise.
+ * - Reduced-motion: single static frame, no loop.
+ * - WebGL failure: returns false, caller keeps the <img> fallback.
+ */
+
+const PREVIEW_SIZE = 220;
+const SPIN_SCALE = 4; // card spin is scaled up so motion reads in 110px
+
+const prefersReducedMotion = () =>
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export class PlanetPreview {
     constructor() {
-        this.container = null;
         this.scene = null;
         this.camera = null;
         this.renderer = null;
+        this.tiltGroup = null;
         this.planetMesh = null;
-        this.planetGroup = null;
+        this.geometry = null;
+        this.textureLoader = null;
+        this.textureCache = new Map();
         this.animationId = null;
-        this.textureLoader = new THREE.TextureLoader();
-
-        // Interaction state
-        this.isDragging = false;
-        this.previousMousePosition = { x: 0, y: 0 };
-        this.rotationVelocity = 0;
-        this.baseRotationSpeed = 0.002;
-        this.currentRotationSpeed = 0.002;
-
-        this.init();
+        this.ready = false;
+        this.failed = false;
+        this.currentPlanetId = null;
+        this.spin = 0.008;
+        this.isRunning = false;
     }
 
-    init() {
-        // Scene with transparent background
-        this.scene = new THREE.Scene();
+    /** Lazily create the shared renderer. False when WebGL unavailable. */
+    ensureReady() {
+        if (this.ready) return true;
+        if (this.failed) return false;
+        try {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (!gl) {
+                this.failed = true;
+                return false;
+            }
 
-        // Camera positioned to see the planet clearly
-        this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-        this.camera.position.z = 5;
+            this.scene = new THREE.Scene();
 
-        // Renderer
-        this.renderer = new THREE.WebGLRenderer({
-            alpha: true,
-            antialias: true,
-            powerPreference: "high-performance"
-        });
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            this.camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+            this.camera.position.z = 5;
 
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        this.scene.add(ambientLight);
+            const isMobile = window.innerWidth < 768;
+            this.renderer = new THREE.WebGLRenderer({
+                alpha: true,
+                antialias: !isMobile,
+                powerPreference: isMobile ? 'low-power' : 'high-performance',
+            });
+            this.renderer.setPixelRatio(1);
+            this.renderer.setSize(PREVIEW_SIZE, PREVIEW_SIZE, false);
+            this.renderer.domElement.className = 'stats-planet-canvas';
+            this.renderer.domElement.style.width = '100%';
+            this.renderer.domElement.style.height = '100%';
+            this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-        const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
-        dirLight.position.set(5, 3, 5);
-        this.scene.add(dirLight);
+            const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+            this.scene.add(ambient);
+            // Key light off to the side so the sphere reads as 3D: a visible
+            // day/night terminator that the texture rotates through.
+            const dir = new THREE.DirectionalLight(0xffffff, 2.2);
+            dir.position.set(4, 1.5, 2.5);
+            this.scene.add(dir);
+
+            this.geometry = new THREE.SphereGeometry(1.5, 32, 32);
+            this.textureLoader = new THREE.TextureLoader();
+            this.ready = true;
+            return true;
+        } catch (error) {
+            this.failed = true;
+            return false;
+        }
     }
 
+    loadTexture(planetId, url) {
+        if (this.textureCache.has(planetId)) {
+            return this.textureCache.get(planetId);
+        }
+        const tex = this.textureLoader.load(
+            url,
+            () => {
+                // Repaint once the async texture arrives (loop may be mid-run).
+                if (this.isRunning && this.renderer && this.planetMesh) {
+                    this.renderer.render(this.scene, this.camera);
+                }
+            },
+            undefined,
+            () => { /* keep flat color on failure */ }
+        );
+        tex.colorSpace = THREE.SRGBColorSpace;
+        this.textureCache.set(planetId, tex);
+        return tex;
+    }
+
+    /**
+     * Mount (or re-target) the shared canvas into a stats sphere element.
+     * Returns false when WebGL is unavailable so the caller keeps <img>.
+     */
     mount(container, planetId) {
-        if (!container) return;
-        this.container = container;
-
-        // Clear previous content
-        while (this.container.firstChild) {
-            this.container.removeChild(this.container.firstChild);
-        }
-
-        // Size renderer to container
-        const width = this.container.clientWidth;
-        const height = this.container.clientHeight;
-        this.renderer.setSize(width, height);
-        this.camera.aspect = width / height;
-        this.camera.updateProjectionMatrix();
-
-        this.container.appendChild(this.renderer.domElement);
-
-        // Create planet
-        this.createPlanet(planetId);
-
-        // Start animation loop
-        this.startLoop();
-
-        // Setup interaction
-        this.setupInteraction();
-    }
-
-    createPlanet(planetId) {
-        // Remove existing planet
-        if (this.planetGroup) {
-            this.scene.remove(this.planetGroup);
-        }
+        if (!container || !planetId) return false;
+        if (!this.ensureReady()) return false;
 
         const config = CONFIG.planets[planetId];
-        if (!config) {
-            return;
+        if (!config) return false;
+
+        // Clear previous planet objects, keep cached textures.
+        if (this.tiltGroup) {
+            this.scene.remove(this.tiltGroup);
+            if (this.planetMesh) {
+                this.planetMesh.material.dispose();
+                this.planetMesh = null;
+            }
+            this.tiltGroup = null;
         }
 
-        this.baseRotationSpeed = config.rotationSpeed || 0.002;
-        this.currentRotationSpeed = this.baseRotationSpeed;
+        this.tiltGroup = new THREE.Group();
+        // True axial tilt (deg → rad). Venus 177.4° renders upside-down,
+        // Uranus 97.8° rolls on its side — same as the real planets.
+        const tiltDeg = typeof config.axialTilt === 'number' ? config.axialTilt : 15;
+        this.tiltGroup.rotation.z = THREE.MathUtils.degToRad(tiltDeg);
 
-        this.planetGroup = new THREE.Group();
-
-        // Geometry - normal sphere
-        // Use a standard size for preview, regardless of actual planet size
-        const geometry = new THREE.SphereGeometry(1.5, 64, 64);
-
-        // Material
-        const material = new THREE.MeshStandardMaterial({
-            color: new THREE.Color(config.color),
-            roughness: 0.7,
-            metalness: 0.1
-        });
-
-        if (config.texture) {
-            this.textureLoader.load(config.texture, (tex) => {
-                material.map = tex;
-                material.needsUpdate = true;
-            });
-        }
-
-        // Special case for Sun (emissive)
+        let material;
         if (planetId === 'sun') {
-            material.emissive = new THREE.Color(config.emissive);
-            material.emissiveIntensity = 0.5;
+            material = new THREE.MeshBasicMaterial({
+                color: new THREE.Color(config.color),
+            });
+            if (config.texture) {
+                material.map = this.loadTexture(planetId, config.texture);
+            }
+        } else {
+            material = new THREE.MeshStandardMaterial({
+                color: new THREE.Color(config.color),
+                roughness: 0.85,
+                metalness: 0.05,
+            });
+            if (config.texture) {
+                material.map = this.loadTexture(planetId, config.texture);
+            }
         }
 
-        this.planetMesh = new THREE.Mesh(geometry, material);
+        this.planetMesh = new THREE.Mesh(this.geometry, material);
+        this.tiltGroup.add(this.planetMesh);
 
-        // Add tilt
-        this.planetGroup.rotation.z = Math.PI / 12; // 15 degrees tilt
-        this.planetGroup.add(this.planetMesh);
-
-        // Add Rings if Saturn
         if (planetId === 'saturn' && config.hasRing) {
-            this.createRing(this.planetGroup);
+            this.tiltGroup.add(this.createRing());
         }
 
-        this.scene.add(this.planetGroup);
+        this.scene.add(this.tiltGroup);
+
+        // Spin sign carries the retrograde motion: Venus + Uranus go backwards.
+        const dir = config.retrograde ? -1 : 1;
+        this.spin = (config.rotationSpeed || 0.002) * SPIN_SCALE * dir;
+        this.currentPlanetId = planetId;
+
+        if (!container.contains(this.renderer.domElement)) {
+            container.appendChild(this.renderer.domElement);
+        }
+
+        // One immediate frame so the circle is never empty, then loop.
+        this.renderer.render(this.scene, this.camera);
+        if (!prefersReducedMotion()) {
+            this.start();
+        } else {
+            this.stop();
+        }
+        return true;
     }
 
-    createRing(parent) {
-        const ringGeo = new THREE.RingGeometry(2.0, 3.5, 64);
-        const pos = ringGeo.attributes.position;
-        const v3 = new THREE.Vector3();
-
-        for (let i = 0; i < pos.count; i++) {
-            v3.fromBufferAttribute(pos, i);
-            ringGeo.attributes.uv.setXY(i, v3.length() < 2.5 ? 0 : 1, 1);
-        }
-
+    createRing() {
+        const ringGeo = new THREE.RingGeometry(2.0, 3.2, 48);
         const ringMat = new THREE.MeshBasicMaterial({
             color: 0xcfb596,
             side: THREE.DoubleSide,
             transparent: true,
-            opacity: 0.8
+            opacity: 0.85,
         });
-
         if (CONFIG.planets.saturn.ringTexture) {
-            this.textureLoader.load(CONFIG.planets.saturn.ringTexture, (tex) => {
-                ringMat.map = tex;
-                ringMat.alphaMap = tex;
-                ringMat.needsUpdate = true;
-            });
+            const tex = this.loadTexture('saturn-ring', CONFIG.planets.saturn.ringTexture);
+            ringMat.map = tex;
+            ringMat.alphaMap = tex;
         }
-
         const ring = new THREE.Mesh(ringGeo, ringMat);
-        ring.rotation.x = Math.PI / 2;
-        parent.add(ring);
+        ring.rotation.x = Math.PI / 2.4;
+        return ring;
     }
 
-    startLoop() {
+    start() {
+        if (this.isRunning || !this.ready || prefersReducedMotion()) return;
+        this.isRunning = true;
         if (this.animationId) cancelAnimationFrame(this.animationId);
-
         const animate = () => {
-            if (!this.planetMesh) return;
-
-            // Apply rotation
-            if (this.isDragging) {
-                this.planetMesh.rotation.y += this.rotationVelocity;
-            } else {
-                // Lerp back to base speed
-                this.currentRotationSpeed = THREE.MathUtils.lerp(this.currentRotationSpeed, this.baseRotationSpeed, 0.05);
-
-                // Add velocity momentum decay
-                if (Math.abs(this.rotationVelocity) > 0.0001) {
-                    this.rotationVelocity *= 0.95; // Decay
-                    this.planetMesh.rotation.y += this.rotationVelocity;
-                } else {
-                    this.planetMesh.rotation.y += this.currentRotationSpeed;
+            if (!this.isRunning) return;
+            if (!document.hidden && this.planetMesh) {
+                this.planetMesh.rotation.y += this.spin;
+                if (this.renderer) {
+                    this.renderer.render(this.scene, this.camera);
                 }
             }
-
-            this.renderer.render(this.scene, this.camera);
             this.animationId = requestAnimationFrame(animate);
         };
-
         animate();
     }
 
-    setupInteraction() {
-        const canvas = this.renderer.domElement;
-
-        canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
-        window.addEventListener('mousemove', (e) => this.onMouseMove(e));
-        window.addEventListener('mouseup', (e) => this.onMouseUp(e));
-
-        // Touch events
-        canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault(); // Prevent scrolling
-            this.onMouseDown(e.touches[0]);
-        });
-        window.addEventListener('touchmove', (e) => this.onMouseMove(e.touches[0]));
-        window.addEventListener('touchend', (e) => this.onMouseUp());
-    }
-
-    onMouseDown(e) {
-        if (e.target !== this.renderer.domElement) return;
-        this.isDragging = true;
-        this.previousMousePosition = { x: e.clientX, y: e.clientY };
-        this.rotationVelocity = 0;
-        this.container.style.cursor = 'grabbing';
-    }
-
-    onMouseMove(e) {
-        if (!this.isDragging) return;
-
-        const deltaX = e.clientX - this.previousMousePosition.x;
-
-        // Rotate based on drag
-        this.rotationVelocity = deltaX * 0.005;
-        this.planetMesh.rotation.y += this.rotationVelocity;
-
-        this.previousMousePosition = { x: e.clientX, y: e.clientY };
-    }
-
-    onMouseUp() {
-        if (this.isDragging) {
-            this.isDragging = false;
-            this.container.style.cursor = 'grab';
-        }
-    }
-
     stop() {
+        this.isRunning = false;
         if (this.animationId) {
             cancelAnimationFrame(this.animationId);
             this.animationId = null;
@@ -243,12 +230,22 @@ export class PlanetPreview {
 
     dispose() {
         this.stop();
+        if (this.geometry) {
+            this.geometry.dispose();
+            this.geometry = null;
+        }
+        for (const tex of this.textureCache.values()) {
+            tex.dispose();
+        }
+        this.textureCache.clear();
         if (this.renderer) {
             this.renderer.dispose();
-            if (this.container && this.container.contains(this.renderer.domElement)) {
-                this.container.removeChild(this.renderer.domElement);
+            if (this.renderer.domElement.parentNode) {
+                this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
             }
+            this.renderer = null;
         }
-        // Remove event listeners (requires binding reference, but for now simple structure)
+        this.ready = false;
+        this.currentPlanetId = null;
     }
 }

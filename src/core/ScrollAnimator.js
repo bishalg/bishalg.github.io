@@ -1,8 +1,13 @@
 import { CONFIG } from '../config.js';
 import * as THREE from 'three';
 
-// GSAP is loaded globally (for camera animations only)
-const gsap = window.gsap;
+// GSAP is loaded globally (for camera animations only). May be absent if
+// CDN fails — camera then snaps instantly instead of breaking navigation.
+const getGsap = () => (typeof window !== 'undefined' ? window.gsap : null) || null;
+const prefersReducedMotion = () =>
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /**
  * ScrollAnimator - Simplified with IntersectionObserver
@@ -19,8 +24,9 @@ export class ScrollAnimator {
         this.solarSystemData = solarSystemData;
         this.currentPlanet = null;
         this.currentCard = 0;
+        this.currentPageId = null;
         this.urlUpdateCallback = null;
-        this.animationFrameId = null;
+        this.stateChangeCallback = null;
 
         // Planet camera offsets
         this.planetOffsets = {
@@ -37,14 +43,31 @@ export class ScrollAnimator {
 
         this.scrollContainer = document.getElementById('scroll-container');
         this.pages = document.querySelectorAll('.page[data-planet]');
+        // Cached page list for next/prev (avoid querySelectorAll per click)
+        this._allPages = null;
+        // Reused vector for planet lookups — no per-frame allocation
+        this._tmpPos = new THREE.Vector3();
+        this._lastFocusAt = 0;
+        this._lastFocusPlanet = null;
 
         this.init();
     }
 
     init() {
         this.setupIntersectionObserver();
-        this.startTrackingLoop();
-        console.log('🚀 ScrollAnimator initialized with IntersectionObserver');
+        // NOTE: no internal rAF loop anymore. Call tick() from the single
+        // app render loop in main.js (two loops caused double rAF overhead).
+    }
+
+    /**
+     * Per-frame camera-target follow. Called from App's single rAF loop.
+     * Kept as a method so main.js owns the only requestAnimationFrame chain.
+     */
+    tick() {
+        if (this.currentTarget) {
+            this.getPlanetWorldPosition(this.currentTarget, this._tmpPos);
+            this.cosmicScene.cameraTarget.copy(this._tmpPos);
+        }
     }
 
     /**
@@ -61,17 +84,23 @@ export class ScrollAnimator {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
                     const page = entry.target;
-                    const planet = page.dataset.planet;
-                    const card = parseInt(page.dataset.card, 10);
+                    // Welcome / end pages carry no dataset.planet — normalize
+                    // to null/0 instead of undefined/NaN (NaN !== NaN retriggers).
+                    const planet = page.dataset.planet || null;
+                    const rawCard = parseInt(page.dataset.card, 10);
+                    const card = Number.isNaN(rawCard) ? 0 : rawCard;
+                    const pageId = page.id || null;
 
-                    // Only update if state changed
-                    if (this.currentPlanet !== planet || this.currentCard !== card) {
-                        console.log(`📍 Page visible: ${planet}-${card}`);
+                    // Only update if state changed (include pageId so
+                    // welcome(null,0) and end(null,0) are distinct states).
+                    if (this.currentPlanet !== planet || this.currentCard !== card || this.currentPageId !== pageId) {
                         this.currentPlanet = planet;
                         this.currentCard = card;
+                        this.currentPageId = pageId;
 
                         this.updateVisualsForState(planet, card);
                         this.updateUrl(planet, card);
+                        this.emitStateChange(planet, card, pageId);
                     }
                 }
             });
@@ -95,16 +124,37 @@ export class ScrollAnimator {
     /**
      * Navigate to next state
      */
+    _cachedPages() {
+        if (!this._allPages || this._allPages.length === 0) {
+            this._allPages = Array.from(document.querySelectorAll('.page'));
+        }
+        return this._allPages;
+    }
+
+    _smoothScrollTo(el) {
+        if (!el) return;
+        if (prefersReducedMotion()) {
+            el.scrollIntoView({ behavior: 'auto' });
+        } else {
+            el.scrollIntoView({ behavior: 'smooth' });
+        }
+    }
+
     goToNextState() {
-        const allPages = Array.from(document.querySelectorAll('.page'));
-        const currentIndex = allPages.findIndex(p =>
-            p.dataset.planet === this.currentPlanet &&
-            parseInt(p.dataset.card, 10) === this.currentCard
-        );
+        const allPages = this._cachedPages();
+        let currentIndex;
+        if (this.currentPageId) {
+            currentIndex = allPages.findIndex((p) => p.id === this.currentPageId);
+        } else {
+            currentIndex = allPages.findIndex(p =>
+                p.dataset.planet === this.currentPlanet &&
+                parseInt(p.dataset.card, 10) === this.currentCard
+            );
+        }
 
         if (currentIndex >= 0 && currentIndex < allPages.length - 1) {
             const nextPage = allPages[currentIndex + 1];
-            nextPage.scrollIntoView({ behavior: 'smooth' });
+            this._smoothScrollTo(nextPage);
         }
     }
 
@@ -112,15 +162,20 @@ export class ScrollAnimator {
      * Navigate to previous state
      */
     goToPrevState() {
-        const allPages = Array.from(document.querySelectorAll('.page'));
-        const currentIndex = allPages.findIndex(p =>
-            p.dataset.planet === this.currentPlanet &&
-            parseInt(p.dataset.card, 10) === this.currentCard
-        );
+        const allPages = this._cachedPages();
+        let currentIndex;
+        if (this.currentPageId) {
+            currentIndex = allPages.findIndex((p) => p.id === this.currentPageId);
+        } else {
+            currentIndex = allPages.findIndex(p =>
+                p.dataset.planet === this.currentPlanet &&
+                parseInt(p.dataset.card, 10) === this.currentCard
+            );
+        }
 
         if (currentIndex > 0) {
             const prevPage = allPages[currentIndex - 1];
-            prevPage.scrollIntoView({ behavior: 'smooth' });
+            this._smoothScrollTo(prevPage);
         }
     }
 
@@ -130,7 +185,7 @@ export class ScrollAnimator {
     goToPlanetCard(planet, card) {
         const targetPage = document.getElementById(`${planet}-${card}`);
         if (targetPage) {
-            targetPage.scrollIntoView({ behavior: 'smooth' });
+            this._smoothScrollTo(targetPage);
         }
     }
 
@@ -176,31 +231,59 @@ export class ScrollAnimator {
         }
     }
 
+    emitStateChange(planet, card, pageId) {
+        if (this.stateChangeCallback) {
+            this.stateChangeCallback({ planet, card, pageId });
+        }
+    }
+
+    setOnStateChange(callback) {
+        this.stateChangeCallback = callback;
+    }
+
     // ========== Camera Methods ==========
 
-    getPlanetWorldPosition(planetName) {
+    getPlanetWorldPosition(planetName, target = null) {
         const group = this.cosmicScene.orbitGroups[planetName];
-        if (!group) return new THREE.Vector3(0, 0, 0);
-        const pos = new THREE.Vector3();
-        group.getWorldPosition(pos);
-        return pos;
+        const out = target || new THREE.Vector3();
+        if (!group) return out.set(0, 0, 0);
+        group.getWorldPosition(out);
+        return out;
     }
 
     focusOnPlanet(planetName, cameraOffset = { x: 15, y: 5, z: 15 }) {
         // Slow down simulation for stable tracking
         this.cosmicScene.setSimulationSpeed(0.05);
 
-        const planetPos = this.getPlanetWorldPosition(planetName);
-        const camera = this.cosmicScene.camera;
+        // Debounce same-planet refocus within 150ms (rapid scroll fires IO repeatedly)
+        const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        if (planetName === this._lastFocusPlanet && now - this._lastFocusAt < 150) {
+            this.currentTarget = planetName;
+            return;
+        }
+        this._lastFocusPlanet = planetName;
+        this._lastFocusAt = now;
 
-        gsap.to(camera.position, {
-            x: planetPos.x + cameraOffset.x,
-            y: cameraOffset.y,
-            z: planetPos.z + cameraOffset.z,
-            duration: 1.0,
-            ease: 'power2.out',
-            overwrite: true
-        });
+        this.getPlanetWorldPosition(planetName, this._tmpPos);
+        const camera = this.cosmicScene.camera;
+        const gsap = getGsap();
+
+        if (!gsap || prefersReducedMotion()) {
+            camera.position.set(
+                this._tmpPos.x + cameraOffset.x,
+                cameraOffset.y,
+                this._tmpPos.z + cameraOffset.z
+            );
+        } else {
+            gsap.to(camera.position, {
+                x: this._tmpPos.x + cameraOffset.x,
+                y: cameraOffset.y,
+                z: this._tmpPos.z + cameraOffset.z,
+                duration: 0.6,
+                ease: 'power2.out',
+                overwrite: true
+            });
+        }
 
         this.currentTarget = planetName;
     }
@@ -211,21 +294,27 @@ export class ScrollAnimator {
 
         const camera = this.cosmicScene.camera;
         const initialPos = CONFIG.camera.initialPosition;
+        const gsap = getGsap();
 
-        gsap.to(camera.position, {
-            x: initialPos.x,
-            y: initialPos.y,
-            z: initialPos.z,
-            duration: 1.5,
-            ease: 'power2.out',
-            overwrite: true
-        });
+        if (!gsap || prefersReducedMotion()) {
+            camera.position.set(initialPos.x, initialPos.y, initialPos.z);
+            this.cosmicScene.cameraTarget.set(0, 0, 0);
+        } else {
+            gsap.to(camera.position, {
+                x: initialPos.x,
+                y: initialPos.y,
+                z: initialPos.z,
+                duration: 0.9,
+                ease: 'power2.out',
+                overwrite: true
+            });
 
-        gsap.to(this.cosmicScene.cameraTarget, {
-            x: 0, y: 0, z: 0,
-            duration: 1.5,
-            ease: 'power2.out'
-        });
+            gsap.to(this.cosmicScene.cameraTarget, {
+                x: 0, y: 0, z: 0,
+                duration: 0.9,
+                ease: 'power2.out'
+            });
+        }
 
         this.currentTarget = null;
         this.currentPlanet = null;
@@ -233,25 +322,11 @@ export class ScrollAnimator {
         this.holocard.hide();
     }
 
-    startTrackingLoop() {
-        const track = () => {
-            if (this.currentTarget) {
-                const targetPos = this.getPlanetWorldPosition(this.currentTarget);
-                this.cosmicScene.cameraTarget.copy(targetPos);
-            }
-            this.animationFrameId = requestAnimationFrame(track);
-        };
-        track();
-    }
-
     setUrlUpdateCallback(callback) {
         this.urlUpdateCallback = callback;
     }
 
     destroy() {
-        if (this.animationFrameId) {
-            cancelAnimationFrame(this.animationFrameId);
-        }
         if (this.observer) {
             this.observer.disconnect();
         }

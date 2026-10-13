@@ -9,11 +9,21 @@
  */
 import { AnimationStrategy } from './AnimationStrategy.js';
 
-const gsap = window.gsap;
-
+const getGsap = () => (typeof window !== 'undefined' ? window.gsap : null) || null;
 const prefersReducedMotion = () =>
     typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function applyAlpha(card, visible, zIndex = null) {
+    const gsap = getGsap();
+    if (zIndex !== null) card.style.zIndex = String(zIndex);
+    if (gsap && !prefersReducedMotion()) return true;
+    // No-GSAP / reduced-motion fast path: instant, no tween churn
+    card.style.opacity = visible ? '1' : '0';
+    card.style.visibility = visible ? 'visible' : 'hidden';
+    return false;
+}
 
 export class SimpleFadeStrategy extends AnimationStrategy {
     constructor() {
@@ -31,8 +41,13 @@ export class SimpleFadeStrategy extends AnimationStrategy {
         // Set only autoAlpha/zIndex — do NOT touch x/y/scale/rotation because
         // GSAP writing those properties replaces CSS transform:translate(-50%,-50%)
         // centering with translate3d(0,0,0), breaking card positioning.
+        const gsap = getGsap();
         cards.forEach((card, index) => {
-            gsap.set(card, { autoAlpha: 0, zIndex: cards.length - index });
+            if (gsap && !prefersReducedMotion()) {
+                gsap.set(card, { autoAlpha: 0, zIndex: cards.length - index });
+            } else {
+                applyAlpha(card, false, cards.length - index);
+            }
         });
     }
 
@@ -44,9 +59,14 @@ export class SimpleFadeStrategy extends AnimationStrategy {
 
         const targetArrayIndex = activeIndex - 1;
         const { enter, exit } = this._durations();
+        const gsap = getGsap();
 
         cards.forEach((card, index) => {
             const isActive = index === targetArrayIndex;
+            if (!gsap || prefersReducedMotion()) {
+                applyAlpha(card, isActive);
+                return;
+            }
             // Raise the incoming card above siblings so the crossfade never flashes through.
             if (isActive) {
                 gsap.set(card, { zIndex: cards.length + 1 });
@@ -64,6 +84,11 @@ export class SimpleFadeStrategy extends AnimationStrategy {
 
     exit(cards) {
         const { exit } = this._durations();
+        const gsap = getGsap();
+        if (!gsap || prefersReducedMotion()) {
+            cards.forEach((card) => applyAlpha(card, false));
+            return;
+        }
         gsap.to(cards, {
             autoAlpha: 0,
             duration: exit,

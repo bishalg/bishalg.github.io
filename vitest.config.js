@@ -7,7 +7,12 @@ export default defineConfig({
     include: ['src/**/*.test.js'],
     coverage: {
       include: ['src/**/*.js'],
-      exclude: ['src/**/*.test.js', 'src/main.js'],
+      exclude: [
+        'src/**/*.test.js',
+        'src/main.js',
+        // Playwright specs run under `npm run test:e2e`, never vitest.
+        'src/tests/**',
+      ],
       reporter: ['text', 'json', 'html'],
       thresholds: {
         global: {

@@ -29,7 +29,8 @@ export const CONFIG = {
             distance: 0,
             angle: 0,
             speed: 0.0002,
-            rotationSpeed: 0.0005
+            rotationSpeed: 0.0005,
+            axialTilt: 7.25
         },
         mercury: {
             name: 'mercury',
@@ -39,7 +40,8 @@ export const CONFIG = {
             distance: 30,
             angle: Math.random() * Math.PI * 2,
             speed: 0.004,
-            rotationSpeed: 0.002
+            rotationSpeed: 0.002,
+            axialTilt: 0.03
         },
         venus: {
             name: 'venus',
@@ -49,7 +51,9 @@ export const CONFIG = {
             distance: 45,
             angle: Math.random() * Math.PI * 2,
             speed: 0.003,
-            rotationSpeed: 0.0015
+            rotationSpeed: 0.0015,
+            axialTilt: 177.4,
+            retrograde: true
         },
         earth: {
             name: 'earth',
@@ -59,7 +63,8 @@ export const CONFIG = {
             distance: 65,
             angle: 0.5,
             speed: 0.002,
-            rotationSpeed: 0.002
+            rotationSpeed: 0.002,
+            axialTilt: 23.4
         },
         moon: {
             name: 'moon',
@@ -69,7 +74,8 @@ export const CONFIG = {
             distance: 8,
             angle: 0,
             speed: 0.01,
-            rotationSpeed: 0.005
+            rotationSpeed: 0.005,
+            axialTilt: 6.7
         },
         mars: {
             name: 'mars',
@@ -79,7 +85,8 @@ export const CONFIG = {
             distance: 85,
             angle: Math.random() * Math.PI * 2,
             speed: 0.0018,
-            rotationSpeed: 0.002
+            rotationSpeed: 0.002,
+            axialTilt: 25.2
         },
         jupiter: {
             name: 'jupiter',
@@ -89,7 +96,8 @@ export const CONFIG = {
             distance: 130,
             angle: Math.random() * Math.PI * 2,
             speed: 0.0008,
-            rotationSpeed: 0.004
+            rotationSpeed: 0.004,
+            axialTilt: 3.1
         },
         saturn: {
             name: 'saturn',
@@ -100,6 +108,7 @@ export const CONFIG = {
             angle: Math.random() * Math.PI * 2,
             speed: 0.0006,
             rotationSpeed: 0.003,
+            axialTilt: 26.7,
             hasRing: true,
             ringTexture: 'textures/saturn_ring_alpha_2k_small.png'
         },
@@ -111,7 +120,9 @@ export const CONFIG = {
             distance: 230,
             angle: Math.random() * Math.PI * 2,
             speed: 0.0004,
-            rotationSpeed: 0.002
+            rotationSpeed: 0.002,
+            axialTilt: 97.8,
+            retrograde: true
         },
         neptune: {
             name: 'neptune',
@@ -121,13 +132,14 @@ export const CONFIG = {
             distance: 270,
             angle: Math.random() * Math.PI * 2,
             speed: 0.0003,
-            rotationSpeed: 0.002
+            rotationSpeed: 0.002,
+            axialTilt: 28.3
         }
     },
 
-    // Stars configuration
+    // Stars configuration (2500 is plenty for background depth; 8000 caused overdraw)
     stars: {
-        count: 8000,
+        count: 2500,
         spread: 2000,
         size: 0.7
     },
@@ -144,5 +156,10 @@ export const CONFIG = {
     },
 
     // Performance
-    maxPixelRatio: 2
+    // - Geometry segments for planet spheres (32 is smooth enough, 64 was 4x verts)
+    // - Shadows disabled: PointLight shadows + PCFSoft was the #1 GPU cost
+    planetSegments: 32,
+    enableShadows: false,
+    maxPixelRatio: 1.5,
+    maxPixelRatioMobile: 1.25
 };

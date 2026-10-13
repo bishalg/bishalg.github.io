@@ -896,7 +896,37 @@ html {
     width: 110px;
     height: 110px;
     border-radius: 50%;
+    overflow: hidden;
+    position: relative;
     animation: pulseObj 4s infinite ease-in-out;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.stats-planet-sphere img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    display: block;
+    position: relative;
+    z-index: 1;
+}
+
+/* Live 3D canvas sits above the <img> fallback, clipped to the circle */
+.stats-planet-sphere canvas.stats-planet-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 50%;
+    z-index: 2;
+    display: block;
+}
+
+/* The pulse blink belongs to the static placeholder only — a live,
+   rotating planet must stay steady or motion is unreadable. */
+.stats-planet-sphere:has(canvas.stats-planet-canvas) {
+    animation: none;
 }
 
 .stats-planet-name {
@@ -1324,6 +1354,186 @@ html {
     .project-highlight,
     .podcast-highlight,
     .podcast-link {
+        transition: none;
+    }
+}
+
+/* ---------------------------------------------------------
+   SCROLL RAIL — quiet persistent timeline indicator
+   11 stops: welcome + 9 planets + end. Cards 0-3 render as a
+   tiny fill inside the active dot, not as extra rows.
+   Perf: opacity/transform only, no backdrop-filter, no layout.
+   --------------------------------------------------------- */
+.scroll-rail {
+    position: fixed;
+    right: 18px;
+    top: 50%;
+    transform: translateY(-50%) translateZ(0);
+    z-index: 1200;
+    /* Above holocard overlay (100) + nav buttons (1000) so it stays visible */
+    pointer-events: auto;
+    user-select: none;
+}
+
+.scroll-rail__list {
+    list-style: none;
+    margin: 0;
+    padding: 8px 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    position: relative;
+}
+
+/* hairline spine behind dots */
+.scroll-rail__list::before {
+    content: '';
+    position: absolute;
+    right: 11px;
+    top: 14px;
+    bottom: 14px;
+    width: 1px;
+    background: rgba(0, 243, 255, 0.18);
+    pointer-events: none;
+}
+
+.scroll-rail__item {
+    margin: 0;
+    padding: 0;
+}
+
+.scroll-rail__btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-direction: row-reverse;
+    background: transparent;
+    border: 0;
+    padding: 5px 2px;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    /* larger hit area than the visible dot */
+    min-height: 24px;
+}
+
+.scroll-rail__num {
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.28);
+    min-width: 16px;
+    text-align: right;
+    transition: color 0.2s ease, opacity 0.2s ease;
+    opacity: 0;
+}
+
+.scroll-rail__dot {
+    position: relative;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 243, 255, 0.45);
+    background: rgba(0, 5, 15, 0.6);
+    overflow: hidden;
+    flex-shrink: 0;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    will-change: transform;
+}
+
+.scroll-rail__fill {
+    position: absolute;
+    inset: 0;
+    background: var(--color-cyan);
+    transform: scaleX(0);
+    transform-origin: left center;
+    /* transform-only animation, compositor friendly */
+}
+
+.scroll-rail__label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.55);
+    opacity: 0;
+    transform: translateX(4px);
+    transition: opacity 0.2s ease, transform 0.2s ease, color 0.2s ease;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+/* hover / focus reveals label — quiet by default */
+.scroll-rail__btn:hover .scroll-rail__label,
+.scroll-rail__btn:focus-visible .scroll-rail__label {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.scroll-rail__btn:hover .scroll-rail__num,
+.scroll-rail__btn:focus-visible .scroll-rail__num {
+    opacity: 1;
+    color: rgba(0, 243, 255, 0.8);
+}
+
+.scroll-rail__btn:focus-visible {
+    outline: 1px solid var(--color-cyan);
+    outline-offset: 3px;
+}
+
+/* active stop: filled dot + visible label, still small */
+.scroll-rail__btn.is-active .scroll-rail__dot {
+    border-color: var(--color-cyan);
+    box-shadow: 0 0 8px rgba(0, 243, 255, 0.55);
+    transform: scale(1.25);
+}
+
+.scroll-rail__btn.is-active .scroll-rail__label {
+    opacity: 1;
+    transform: translateX(0);
+    color: #fff;
+}
+
+.scroll-rail__btn.is-active .scroll-rail__num {
+    opacity: 1;
+    color: var(--color-cyan);
+}
+
+/* Mobile: rail off, thin top progress bar on */
+.scroll-progress-top {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    z-index: 1200;
+    background: rgba(255, 255, 255, 0.06);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.scroll-progress-top__fill {
+    width: 100%;
+    height: 100%;
+    background: var(--color-cyan);
+    box-shadow: 0 0 6px rgba(0, 243, 255, 0.6);
+    transform: scaleX(0);
+    transform-origin: left center;
+}
+
+@media (max-width: 768px) {
+    .scroll-rail {
+        display: none;
+    }
+
+    .scroll-progress-top {
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .scroll-rail__dot,
+    .scroll-rail__label,
+    .scroll-rail__num,
+    .scroll-progress-top__fill {
         transition: none;
     }
 }

@@ -1,10 +1,7 @@
 import { solarSystemData } from '../data/solarSystemData.js';
 import { createStatGrid, createProfessionalContent, createPersonalNarrative, createPanelHeader } from './HUDComponents.js';
 import { SimpleFadeStrategy } from './animations/SimpleFadeStrategy.js';
-
-// GSAP is loaded globally
-const gsap = window.gsap;
-const ScrollTrigger = window.ScrollTrigger;
+import { PlanetPreview } from './PlanetPreview.js';
 
 /**
  * Holocard - Holographic CV Card Component
@@ -47,12 +44,9 @@ export class Holocard {
         this.onNavigateToNext = null;
         this.isNavigating = false;
 
-        // Register GSAP plugins
-        gsap.registerPlugin(ScrollTrigger);
-
-        // Animation state
-        this.cardAnimations = new Map(); // Store ScrollTrigger instances per card (DEPRECATED: specific to strategy)
-        this.currentPlanetScenes = null; // Store current planet's scroll scenes
+        // Live 3D planet preview (lazy: renderer created on first stats card).
+        this.planetPreview = null;
+        this.previewPlanetId = null;
 
         // Close on backdrop click
         this.wrapper.querySelector('.holocard-backdrop').addEventListener('click', () => this.hide());
@@ -119,11 +113,15 @@ export class Holocard {
 
         this.currentPlanet = data.id;
         this.currentCardIndex = 0;
+        this.previewPlanetId = data.id;
 
         // Hide the wrapper/backdrop for clean Card 0 view initially
         this.wrapper.classList.remove('visible');
         this.wrapper.classList.add('hidden');
         this.isVisible = false;
+
+        // Pause any running preview while on the planet overview (card 0).
+        if (this.planetPreview) this.planetPreview.stop();
 
         // Delegate visual setup to strategy
         this.strategy.enter(this.wrapper, this.cards, data);
@@ -200,7 +198,40 @@ export class Holocard {
             }
         }
 
+        this.currentCardIndex = cardIndex;
         this.strategy.update(this.cards, cardIndex, progress);
+
+        // Live 3D preview runs only on the stats card (card 1). Everywhere
+        // else it pauses so the tiny renderer costs zero GPU.
+        if (cardIndex === 1 && this.previewPlanetId) {
+            this.mountPreview();
+        } else if (this.planetPreview) {
+            this.planetPreview.stop();
+        }
+    }
+
+    /**
+     * Mount the shared preview canvas into the stats sphere. Deferred to
+     * rAF so the card has layout; fixed-size renderer so a hidden (0x0)
+     * container can never break sizing. WebGL failure keeps <img> fallback.
+     */
+    mountPreview() {
+        const planetId = this.previewPlanetId;
+        if (!planetId) return;
+        requestAnimationFrame(() => {
+            // Planet may have changed while the frame was queued.
+            if (this.previewPlanetId !== planetId) return;
+            const sphere = this.stackContainer.querySelector(
+                `.card-stats .stats-planet-sphere[data-planet-id="${planetId}"]`
+            ) || this.stackContainer.querySelector('.card-stats .stats-planet-sphere');
+            if (!sphere) return;
+            try {
+                if (!this.planetPreview) this.planetPreview = new PlanetPreview();
+                this.planetPreview.mount(sphere, planetId);
+            } catch (error) {
+                // Keep the <img> fallback — never break card rendering.
+            }
+        });
     }
 
     /**
@@ -210,6 +241,7 @@ export class Holocard {
     hide() {
         if (!this.isVisible && this.cards.length === 0) return;
 
+        if (this.planetPreview) this.planetPreview.stop();
         this.strategy.exit(this.cards);
 
         setTimeout(() => {
@@ -219,6 +251,7 @@ export class Holocard {
             this.cards = [];
             this.currentPlanet = null;
             this.currentCardIndex = 0;
+            this.previewPlanetId = null;
 
         }, 300);
     }
@@ -234,6 +267,10 @@ export class Holocard {
      * Clean up animations and resources
      */
     destroy() {
+        if (this.planetPreview) {
+            this.planetPreview.dispose();
+            this.planetPreview = null;
+        }
         if (this.wrapper && this.wrapper.parentNode) {
             this.wrapper.parentNode.removeChild(this.wrapper);
         }
