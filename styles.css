@@ -929,6 +929,12 @@ html {
     animation: none;
 }
 
+/* 3D live: the <img> is fallback-only — hide it so its static texture
+   map can't ghost through the transparent canvas as a double image. */
+.stats-planet-sphere.has-3d img {
+    display: none;
+}
+
 .stats-planet-name {
     font-family: 'Cinzel', serif;
     font-size: 0.7rem;

@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 vi.mock('three', () => {
     const calls = [];
+    const lights = [];
     class V3 {
         constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
         set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
@@ -29,8 +30,15 @@ vi.mock('three', () => {
         RingGeometry: class {},
         MeshBasicMaterial: StubMat,
         MeshStandardMaterial: StubMat,
-        AmbientLight: class {},
-        DirectionalLight: class { constructor() { this.position = new V3(); } },
+        AmbientLight: class {
+            constructor(color, intensity) { this.color = color; this.intensity = intensity; lights.push(this); }
+        },
+        DirectionalLight: class {
+            constructor(color, intensity) {
+                this.color = color; this.intensity = intensity;
+                this.position = new V3(); lights.push(this);
+            }
+        },
         PerspectiveCamera: class { constructor() { this.position = new V3(); } },
         TextureLoader: class {
             load(url, ok, prog, err) {
@@ -53,10 +61,11 @@ vi.mock('three', () => {
             dispose() {}
         },
         MathUtils: { degToRad: (d) => (d * Math.PI) / 180 },
-        Color: class {},
+        Color: class { constructor(v) { this.value = v; } },
         DoubleSide: 'double',
         SRGBColorSpace: 'srgb',
         __renderCalls: calls,
+        __lights: lights,
     };
 });
 
@@ -64,12 +73,14 @@ import { PlanetPreview } from './PlanetPreview.js';
 import * as MockThree from 'three';
 
 const renderCalls = MockThree.__renderCalls;
+const lights = MockThree.__lights;
 
 const realGetContext = HTMLCanvasElement.prototype.getContext;
 
 describe('PlanetPreview', () => {
     beforeEach(() => {
         renderCalls.length = 0;
+        lights.length = 0;
         document.body.innerHTML = '';
         HTMLCanvasElement.prototype.getContext = () => ({});
         delete globalThis.window.matchMedia;
@@ -90,9 +101,36 @@ describe('PlanetPreview', () => {
 
     it('rejects bad input without touching the DOM', () => {
         const preview = new PlanetPreview();
+        const el = sphere('earth');
         expect(preview.mount(null, 'earth')).toBe(false);
         expect(preview.mount(sphere('earth'), 'pluto')).toBe(false);
         expect(preview.mount(sphere('earth'), null)).toBe(false);
+        expect(el.classList.contains('has-3d')).toBe(false);
+        preview.dispose();
+    });
+
+    it('marks the sphere live so the fallback image hides (no double image)', () => {
+        const preview = new PlanetPreview();
+        const el = sphere('earth');
+        el.innerHTML = '<img src="textures/earth_daymap_texture_2k_small.jpg" alt="x">';
+        expect(preview.mount(el, 'earth')).toBe(true);
+        expect(el.classList.contains('has-3d')).toBe(true);
+        preview.dispose();
+    });
+
+    it('lights the face toward the viewer and keeps textures true-colored', () => {
+        const preview = new PlanetPreview();
+        expect(preview.mount(sphere('neptune'), 'neptune')).toBe(true);
+        // Ambient strong enough that the shadow side never goes black.
+        const ambient = lights.find((l) => l.intensity === 1.0);
+        expect(ambient).toBeDefined();
+        // Key light frontal (z largest component), not side-on.
+        const key = lights.find((l) => l.position && l.position.z === 5);
+        expect(key).toBeDefined();
+        expect(key.position.z).toBeGreaterThan(Math.abs(key.position.x));
+        // White base under the texture map (was dark config tint * map).
+        expect(preview.planetMesh.material.color).toBe(0xffffff);
+        expect(preview.planetMesh.material.map).toBeDefined();
         preview.dispose();
     });
 

@@ -23,8 +23,9 @@ export function createPanelHeader(data) {
 
 // Card 1: Stats + planet preview circle
 // Live 3D preview mounts into .stats-planet-sphere (see PlanetPreview +
-// Holocard). The <img> stays behind the canvas as the no-WebGL fallback,
-// over the accent gradient.
+// Holocard). The <img> is fallback-only: PlanetPreview adds .has-3d on a
+// successful mount and CSS hides the img, so the static map can never
+// ghost through the transparent canvas as a double image.
 export function createStatGrid(data) {
     const stats = data.stats || [];
     const accent = data.accentColor || '#00f3ff';

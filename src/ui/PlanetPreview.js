@@ -73,12 +73,15 @@ export class PlanetPreview {
             this.renderer.domElement.style.height = '100%';
             this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-            const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+            const ambient = new THREE.AmbientLight(0xffffff, 1.0);
             this.scene.add(ambient);
-            // Key light off to the side so the sphere reads as 3D: a visible
-            // day/night terminator that the texture rotates through.
-            const dir = new THREE.DirectionalLight(0xffffff, 2.2);
-            dir.position.set(4, 1.5, 2.5);
+            // Key light mostly frontal (toward the card viewer) so the
+            // visible face reads bright and true-colored; the slight
+            // offset keeps a soft limb falloff instead of a flat look.
+            // The old side light (4, 1.5, 2.5) left half the face black,
+            // which read as a dark overlay in the tiny circle.
+            const dir = new THREE.DirectionalLight(0xffffff, 2.0);
+            dir.position.set(2.5, 1.2, 5);
             this.scene.add(dir);
 
             this.geometry = new THREE.SphereGeometry(1.5, 32, 32);
@@ -139,16 +142,20 @@ export class PlanetPreview {
         this.tiltGroup.rotation.z = THREE.MathUtils.degToRad(tiltDeg);
 
         let material;
+        // White base when a texture is present so the map shows its true
+        // colors. Tinting (map * dark config color, e.g. Neptune navy)
+        // rendered every card planet muddy/dark.
+        const baseColor = config.texture ? 0xffffff : new THREE.Color(config.color);
         if (planetId === 'sun') {
             material = new THREE.MeshBasicMaterial({
-                color: new THREE.Color(config.color),
+                color: baseColor,
             });
             if (config.texture) {
                 material.map = this.loadTexture(planetId, config.texture);
             }
         } else {
             material = new THREE.MeshStandardMaterial({
-                color: new THREE.Color(config.color),
+                color: baseColor,
                 roughness: 0.85,
                 metalness: 0.05,
             });
@@ -174,6 +181,11 @@ export class PlanetPreview {
         if (!container.contains(this.renderer.domElement)) {
             container.appendChild(this.renderer.domElement);
         }
+        // 3D is live: hide the <img> fallback so the texture map behind
+        // the transparent canvas can't ghost through as a double image.
+        // The <img> stays (hidden) so no-WebGL still shows it; spheres are
+        // rebuilt per card, so the class dies with the element.
+        container.classList.add('has-3d');
 
         // One immediate frame so the circle is never empty, then loop.
         this.renderer.render(this.scene, this.camera);
